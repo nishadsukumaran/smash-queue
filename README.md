@@ -46,7 +46,8 @@ the coordinator rather than for whoever is reading this file.
 
 ## The three people using it
 
-**Player** opens the WhatsApp link, taps *Join session*, gets waitlisted if it's full,
+**Player** opens the WhatsApp link, taps their name (or adds themselves if they're new),
+taps *Join session*, gets waitlisted if it's full,
 scans the QR at the door, and from then on their phone answers the only questions they
 ever ask the coordinator: am I checked in, how many games have I had, when am I next,
 which court, who with.
@@ -122,7 +123,9 @@ as the clock allows and no further.
 
 Everything in PRD §31 (MVP scope):
 
-- Player profiles and group membership, no signup
+- Player profiles and group membership, no passwords
+- Self sign-up from the session link, with a duplicate-name guard, and an organizer switch
+  to turn it off
 - Session creation with shareable code, courts, capacity, fee, notes
 - Booking, cancellation, capacity limit, waitlist with automatic promotion and renumbering
 - Signed QR check-in (24-hour expiry, session-scoped) plus manual and walk-in check-in

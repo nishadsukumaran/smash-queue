@@ -80,6 +80,7 @@ async function main() {
         defaultGameType: "balanced",
         weights: { ...DEFAULT_WEIGHTS, balance: BALANCE_BY_TYPE.balanced },
         requireScoreConfirmation: false,
+        allowSelfSignup: true,
       },
       createdAt: now,
     })

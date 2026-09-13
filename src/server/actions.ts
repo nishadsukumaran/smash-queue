@@ -106,6 +106,90 @@ export async function addMember(
   return { ok: true, id: userId };
 }
 
+/** Loose match so "arun menon", "Arun  Menon" and "ArunMenon" all collide. */
+function nameKey(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export type RegisterResult = Result & {
+  /** An existing member whose name matches. Offered instead of a duplicate. */
+  duplicate?: { id: string; name: string };
+};
+
+/**
+ * Self-registration from the session link.
+ *
+ * A duplicate player would quietly wreck the things that matter here: games
+ * played, the fairness score, ratings and history all key off one row per
+ * person. So a name that already exists is never created twice - the caller is
+ * handed the existing member to claim instead.
+ */
+export async function registerPlayer(
+  groupId: string,
+  name: string,
+  phone?: string,
+): Promise<RegisterResult> {
+  const clean = name.trim().replace(/\s+/g, " ");
+  if (clean.length < 2) return { ok: false, message: "Please enter your name" };
+  if (clean.length > 40) return { ok: false, message: "That name is too long" };
+
+  const groupRows = await db.select().from(groups).where(eq(groups.id, groupId));
+  const group = groupRows[0];
+  if (!group) return { ok: false, message: "Group not found" };
+  if (group.settings?.allowSelfSignup === false)
+    return { ok: false, message: "The organizer adds members for this group. Ask them for an invite." };
+
+  const existing = await db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .innerJoin(groupMembers, eq(groupMembers.userId, users.id))
+    .where(eq(groupMembers.groupId, groupId));
+
+  const key = nameKey(clean);
+  const match = existing.find((u) => nameKey(u.name) === key);
+  if (match)
+    return {
+      ok: false,
+      message: `${match.name} is already on the list.`,
+      duplicate: { id: match.id, name: match.name },
+    };
+
+  const userId = newId("usr");
+  const now = new Date();
+  await db.insert(users).values({
+    id: userId,
+    name: clean,
+    phone: phone?.trim() || null,
+    avatarColor: colorFor(clean),
+    rating: 1200,
+    createdAt: now,
+  });
+  await db.insert(groupMembers).values({
+    id: newId("gm"),
+    groupId,
+    userId,
+    role: "player",
+    joinedAt: now,
+  });
+
+  // Remember them on this phone straight away, so the next tap is the booking.
+  await setCurrentUserId(userId);
+  touch();
+  return { ok: true, id: userId, message: `Welcome, ${clean.split(" ")[0]}` };
+}
+
+export async function setSelfSignup(groupId: string, allow: boolean) {
+  const rows = await db.select().from(groups).where(eq(groups.id, groupId));
+  const group = rows[0];
+  if (!group) return { ok: false, message: "Group not found" };
+  await db
+    .update(groups)
+    .set({ settings: { ...group.settings, allowSelfSignup: allow } })
+    .where(eq(groups.id, groupId));
+  touch();
+  return { ok: true };
+}
+
 export async function setMemberRole(
   membershipId: string,
   role: "player" | "coordinator" | "organizer",

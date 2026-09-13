@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Shuttle } from "@/components/Shuttle";
-import { getRoster, getSessionByCode, listMembers } from "@/server/queries";
+import { NewPlayerForm } from "@/components/NewPlayerForm";
+import { getGroup, getRoster, getSessionByCode, listMembers } from "@/server/queries";
 import { checkInAction } from "@/server/form-actions";
 import { currentUserId } from "@/lib/identity";
 import { verifyCheckInToken } from "@/lib/qr";
@@ -23,13 +24,18 @@ export default async function CheckInPage({
   if (!session) notFound();
 
   const valid = Boolean(t && verifyCheckInToken(t, session.id));
-  const [roster, members, userId] = await Promise.all([
+  const [roster, members, userId, group] = await Promise.all([
     getRoster(session.id),
     listMembers(session.groupId),
     currentUserId(),
+    getGroup(session.groupId),
   ]);
 
   const me = roster.find((r) => r.userId === userId) ?? null;
+  // Roster only covers people with a booking. Somebody who just added themselves
+  // at the door is a member with no booking, and should still be greeted by name
+  // rather than sent hunting through a list of thirty.
+  const meMember = members.find((m) => m.user.id === userId)?.user ?? null;
 
   if (!valid)
     return (
@@ -62,10 +68,10 @@ export default async function CheckInPage({
       </div>
     );
 
-  if (userId && me !== null)
+  if (meMember)
     return (
       <div className="card p-6 text-center">
-        <h2 className="text-xl font-extrabold">{me.name}</h2>
+        <h2 className="text-xl font-extrabold">{meMember.name}</h2>
         <p className="mt-1 text-sm text-muted">Tap once to join tonight&apos;s queue.</p>
         <form action={checkInAction} className="mt-5">
           <input type="hidden" name="sessionId" value={session.id} />
@@ -85,6 +91,20 @@ export default async function CheckInPage({
         <h2 className="mt-1 text-lg font-bold">{session.name}</h2>
         <p className="mt-1 text-sm text-muted">Tap your name to join the queue.</p>
       </div>
+
+      {group?.settings?.allowSelfSignup !== false && (
+        <div className="card p-4">
+          <h3 className="label">First time with this group?</h3>
+          <p className="mt-1 text-sm text-muted">
+            Add yourself, then check in. You only do this once.
+          </p>
+          <NewPlayerForm
+            groupId={session.groupId}
+            next={`/s/${session.code}/checkin?t=${encodeURIComponent(t ?? "")}`}
+            compact
+          />
+        </div>
+      )}
 
       <div className="card divide-y divide-line">
         {members.map(({ user }) => (

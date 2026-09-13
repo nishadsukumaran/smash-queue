@@ -46,16 +46,36 @@ score, who still owes money.
 
 ## 2. For players
 
+### First time with the group
+
+Open the link from WhatsApp and tap **Pick your name**. If you're already on the list, tap
+your name once and your phone remembers it from then on. There's no password and nothing to
+install.
+
+If you're new, use **New here?** at the top: type your name, tap **Add me**, and you're on
+the list for good. A phone number is optional and only the organizer sees it — worth adding
+if someone else in the group shares your first name.
+
+If the name you type already exists, the app won't create a second you. It shows the
+existing person and asks whether that's you. Say yes and you're signed in as them; say no by
+adding a surname or an initial. This matters more than it sounds: games played, the fairness
+score, ratings and history all hang off one record per person, and two records for the same
+player quietly breaks all four.
+
+Turned up at the venue without booking? The QR code at the door has the same **Add me** box,
+so you can join the group and check in from the same screen.
+
 ### Booking
 
-Open the link from WhatsApp. You'll be asked who you are — tap your name once. Your phone
-remembers it after that. There's no password and nothing to install.
+Once the app knows who you are:
 
 Then tap **Join session**.
 
 - If there's space, you're confirmed straight away.
 - If it's full, the button says **Join waitlist** and you'll see your number in the queue.
 - Changed your mind? **Cancel my slot**. Do it early — it's what lets the next person in.
+
+Booking also creates your fee record, so the coordinator can tick you off when you pay.
 
 ### Checking in
 
@@ -197,6 +217,15 @@ pushes on team balance and on mixing people up.
 
 ### Members
 
+By default, anyone who opens the session link can add themselves to the group. That's the
+right setting for a WhatsApp group where the link only goes to people you know, and it means
+you're not the bottleneck on a Saturday evening. Duplicate names are refused, so nobody ends
+up with two records.
+
+If you'd rather vet everyone, turn **Anyone with the link can join** off at the top of the
+Members page. New players then see "ask the organizer" instead of a sign-up box, and you add
+them by hand.
+
 Names usually come straight out of the WhatsApp group. Add them under **Members**. Rating
 is optional — leave it at 1200 and it settles itself once scores start going in.
 
@@ -310,6 +339,10 @@ stays counted — which is the right call, since they did play it.
 **The wrong player got checked in.** Mark them **Gone** in the check-in list. They leave
 the rotation immediately.
 
+**Somebody registered twice under slightly different names.** The app blocks exact repeats,
+not "R Shankar" versus "Ravi Shankar". Deactivate the spare under **Members** and ask them to
+tap the original from now on.
+
 **The fairness score is dropping.** Usually means a lot of people arrived late or several
 people are sitting out. Open **Next players** — the list is ordered exactly as the engine
 sees it, so the people at the top are the ones owed a game.
@@ -323,6 +356,7 @@ the board. It lasts for tonight only.
 
 | I want to | Where |
 | --- | --- |
+| Join the group for the first time | Session link → Pick your name → New here? |
 | Book a slot | Session link → Join session |
 | Check in | Scan the QR, or Check-in tab |
 | See when I'm next | Session link → Your status |

@@ -1,7 +1,7 @@
 import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getGroup, listMembers } from "@/server/queries";
-import { addMemberAction, memberActiveAction, memberRoleAction } from "@/server/form-actions";
+import { addMemberAction, memberActiveAction, memberRoleAction, selfSignupAction } from "@/server/form-actions";
 import { ratingBand } from "@/lib/fairness";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +11,30 @@ export default async function MembersPage() {
   if (!group) return null;
   const members = await listMembers(group.id);
 
+  const selfSignup = group.settings?.allowSelfSignup !== false;
+
   return (
     <div className="space-y-4">
+      <section className="card p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 className="label">Anyone with the link can join</h2>
+            <p className="mt-1 text-xs text-muted">
+              {selfSignup
+                ? "A new player who opens the session link can add themselves to the group. Duplicate names are refused, so nobody ends up with two records."
+                : "Self sign-up is off. Only you can add members, and a new player has to ask."}
+            </p>
+          </div>
+          <form action={selfSignupAction}>
+            <input type="hidden" name="groupId" value={group.id} />
+            <input type="hidden" name="allow" value={selfSignup ? "0" : "1"} />
+            <SubmitButton className={selfSignup ? "btn btn-ghost btn-sm" : "btn btn-teal btn-sm"}>
+              {selfSignup ? "Turn off" : "Turn on"}
+            </SubmitButton>
+          </form>
+        </div>
+      </section>
+
       <section className="card p-4">
         <h2 className="label">Add a member</h2>
         <p className="mt-1 text-xs text-muted">

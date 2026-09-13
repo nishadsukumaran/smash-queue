@@ -52,7 +52,11 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
 
       {!userId && (
         <div className="card border-shuttle/40 p-4">
-          <p className="text-sm">Tap your name once so we know who you are.</p>
+          <p className="text-sm font-semibold">First, who are you?</p>
+          <p className="mt-1 text-sm text-muted">
+            Tap your name from the group list, or add yourself if you&apos;re new. No password,
+            nothing to install.
+          </p>
           <Link href={`/who?next=/s/${session.code}`} className="btn btn-primary mt-3">
             Pick your name
           </Link>

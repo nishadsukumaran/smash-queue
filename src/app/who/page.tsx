@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
+import { NewPlayerForm } from "@/components/NewPlayerForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getGroup, listMembers } from "@/server/queries";
 import { identityAction } from "@/server/form-actions";
@@ -28,6 +29,10 @@ export default async function WhoPage({
         </p>
       </div>
 
+      {group.settings?.allowSelfSignup !== false && (
+        <NewPlayerForm groupId={group.id} next={next ?? "/"} />
+      )}
+
       <div className="card divide-y divide-line">
         {members.map(({ user }) => {
           const band = ratingBand(user.rating);
@@ -54,13 +59,15 @@ export default async function WhoPage({
         })}
       </div>
 
-      <p className="text-center text-xs text-muted">
-        Not on the list? Ask the organizer to add you from{" "}
-        <Link href="/admin/members" className="text-teal underline">
-          Members
-        </Link>
-        .
-      </p>
+      {group.settings?.allowSelfSignup === false && (
+        <p className="text-center text-xs text-muted">
+          Not on the list? The organizer adds members for this group &mdash; ask them, or see{" "}
+          <Link href="/admin/members" className="text-teal underline">
+            Members
+          </Link>
+          .
+        </p>
+      )}
     </div>
   );
 }

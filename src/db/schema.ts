@@ -48,6 +48,12 @@ export type GroupSettings = {
   weights: QueueWeights;
   /** Ask players to confirm a score entered by someone else. */
   requireScoreConfirmation: boolean;
+  /**
+   * Let someone who opens the session link add themselves to the group.
+   * Undefined counts as allowed, so groups created before this existed keep
+   * working. Turn it off and the organizer adds every member by hand.
+   */
+  allowSelfSignup?: boolean;
 };
 
 export type QueueWeights = {

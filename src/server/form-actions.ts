@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import { currentUserId } from "@/lib/identity";
 import type { GameType, PaymentMethod, QueueMode } from "@/db/schema";
 import * as a from "./actions";
+import type { RegisterState } from "./register-types";
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 const num = (fd: FormData, k: string, fallback = 0) => {
@@ -186,6 +187,19 @@ export async function addCostAction(fd: FormData) {
 
 export async function removeCostAction(fd: FormData) {
   await a.removeSessionCost(str(fd, "costId"));
+}
+
+export async function registerPlayerAction(
+  _prev: RegisterState,
+  fd: FormData,
+): Promise<RegisterState> {
+  const res = await a.registerPlayer(str(fd, "groupId"), str(fd, "name"), str(fd, "phone"));
+  if (res.ok) redirect(str(fd, "next") || "/");
+  return { ok: false, message: res.message, duplicate: res.duplicate };
+}
+
+export async function selfSignupAction(fd: FormData) {
+  await a.setSelfSignup(str(fd, "groupId"), str(fd, "allow") === "1");
 }
 
 export async function addMemberAction(fd: FormData) {
