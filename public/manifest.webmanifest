@@ -1,0 +1,18 @@
+{
+  "name": "Smash Queue Beta",
+  "short_name": "SmashQueue",
+  "description": "Book. Check in. Queue. Play. Built by AIOps.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#06100D",
+  "theme_color": "#06100D",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
