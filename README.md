@@ -8,6 +8,7 @@
 [![Live](https://img.shields.io/badge/live-smashq.aiopsgroup.ai-3DD9A4?style=for-the-badge&labelColor=0A1A15)](https://smashq.aiopsgroup.ai)
 [![Tests](https://img.shields.io/badge/tests-38%20passing-3DD9A4?style=for-the-badge&labelColor=0A1A15)](#prove-it-yourself)
 [![Fairness](https://img.shields.io/badge/games%20spread-%E2%89%A4%201-D7F75B?style=for-the-badge&labelColor=0A1A15)](#the-queue-engine)
+[![License](https://img.shields.io/badge/license-Apache%202.0-3DD9A4?style=for-the-badge&labelColor=0A1A15)](LICENSE)
 
 [![Next.js](https://img.shields.io/badge/Next.js%2016-000000?style=flat-square&logo=nextdotjs&logoColor=white)](https://nextjs.org)
 [![React](https://img.shields.io/badge/React%2019-087EA4?style=flat-square&logo=react&logoColor=white)](https://react.dev)
@@ -372,10 +373,38 @@ Found something wrong, or want a weight changed? **hello@aiops.ae**
 
 ---
 
+## Using this
+
+Apache License 2.0 — see [`LICENSE`](LICENSE). Use it commercially, fork it, modify
+it, run it for your club, build a product on it. No permission needed.
+
+Three conditions come with it:
+
+| You must | Where it's written |
+| :--- | :--- |
+| Keep the copyright notice, the licence and the [`NOTICE`](NOTICE) file in any copy you distribute | Apache 2.0, §4(a)–(d) |
+| Keep the **Built by AIOps** credit visible in the running app | [`NOTICE`](NOTICE), carried by §4(d) |
+| State what you changed, if you modified it | Apache 2.0, §4(b) |
+
+The footer credit can be restyled to fit your design. It just has to stay somewhere a
+user would actually find it. Everything else Apache 2.0 allows is yours without asking.
+
+Want different terms — white-label, credit removed, something bespoke? That's a
+conversation, not a no: **hello@aiops.ae**
+
+### Contributing
+
+Issues and pull requests are welcome. The queue engine is the part that matters, so if
+you're changing `src/lib/queue-engine.ts`, run `npm test` and `npm run sim` and put the
+simulator output in the PR — a change that widens the games-played spread is a
+regression even if every test passes.
+
+---
+
 <div align="center">
 
 <sub>**Smash Queue** is built and maintained by **[AIOps](https://aiops.ae)** — vendor-independent
 forward deployed engineering for the GCC.<br>
-&copy; 2026 AIOps. All rights reserved.</sub>
+Copyright &copy; 2026 Nishad Sukumaran (AIOps) · Licensed under [Apache 2.0](LICENSE)</sub>
 
 </div>
