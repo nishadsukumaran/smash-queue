@@ -118,3 +118,103 @@ body {
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: var(--color-line); border-radius: 8px; }
+
+/* ------------------------------------------------------- the guide page -- */
+
+.prose-court {
+  font-size: 1rem;
+  line-height: 1.68;
+  color: var(--color-chalk);
+  max-width: 40rem;
+}
+.prose-court > * + * { margin-top: 1rem; }
+
+.prose-court h2 {
+  margin-top: 2.6rem;
+  font-size: 1.32rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.2;
+  text-wrap: balance;
+  scroll-margin-top: 5.5rem;
+}
+/* The badminton net, reused as the rule between major sections. */
+.prose-court h2::before {
+  content: "";
+  display: block;
+  height: 5px;
+  margin-bottom: 1.4rem;
+  border-top: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+}
+.prose-court > h2:first-child { margin-top: 0; }
+.prose-court > h2:first-child::before { display: none; }
+
+.prose-court h3 {
+  margin-top: 1.9rem;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--color-shuttle);
+  scroll-margin-top: 5.5rem;
+}
+
+.prose-court p { color: color-mix(in oklab, var(--color-chalk) 88%, transparent); }
+.prose-court strong { color: var(--color-chalk); font-weight: 700; }
+.prose-court em { font-style: normal; color: var(--color-teal); }
+
+.prose-court ul, .prose-court ol { padding-left: 1.2rem; }
+.prose-court li { margin-top: .45rem; }
+.prose-court li::marker { color: var(--color-teal); }
+
+.prose-court a { color: var(--color-teal); text-underline-offset: 3px; }
+
+.prose-court code {
+  font-family: var(--font-mono);
+  font-size: .86em;
+  background: var(--color-court);
+  border: 1px solid var(--color-line);
+  padding: .1em .38em;
+  border-radius: 5px;
+  color: var(--color-shuttle);
+}
+
+.prose-court hr {
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  margin-block: 2rem;
+  opacity: .5;
+}
+
+.prose-court blockquote {
+  border-left: 3px solid var(--color-shuttle);
+  padding-left: 1rem;
+  color: var(--color-muted);
+}
+
+.prose-court .table-scroll { overflow-x: auto; }
+.prose-court table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 20rem;
+  font-size: .92rem;
+}
+.prose-court th {
+  text-align: left;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  padding: 0 1rem .6rem 0;
+  border-bottom: 1px solid var(--color-line);
+  white-space: nowrap;
+}
+.prose-court td {
+  padding: .7rem 1rem .7rem 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-line) 55%, transparent);
+  vertical-align: top;
+}
+.prose-court td:first-child { font-weight: 600; }
+.prose-court tbody tr:last-child td { border-bottom: 0; }
+
+.prose-court sub { font-size: .8rem; color: var(--color-muted); }

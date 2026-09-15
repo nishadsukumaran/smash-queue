@@ -71,6 +71,9 @@ export default async function SessionLayout({
               QR code
             </Link>
           )}
+          <Link href="/guide" className="btn btn-ghost btn-sm whitespace-nowrap">
+            Guide
+          </Link>
         </div>
       </nav>
 

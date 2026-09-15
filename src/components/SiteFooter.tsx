@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { APP_NAME, APP_VERSION, RELEASE_CHANNEL, SUPPORT_EMAIL, VENDOR, supportMailto } from "@/lib/brand";
 
 export function SiteFooter() {
@@ -26,6 +27,9 @@ export function SiteFooter() {
           <span className="chip">
             {RELEASE_CHANNEL} &middot; {APP_VERSION}
           </span>
+          <Link href="/guide" className="hover:text-teal">
+            Guide
+          </Link>
           <a href={supportMailto("Support request")} className="truncate hover:text-teal">
             {SUPPORT_EMAIL}
           </a>

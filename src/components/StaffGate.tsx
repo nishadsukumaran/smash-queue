@@ -39,7 +39,10 @@ export async function StaffGate({
         </SubmitButton>
       </form>
       <p className="mt-4 text-center text-xs text-muted">
-        Lost the PIN?{" "}
+        <a href="/guide" className="text-teal hover:underline">
+          What is this?
+        </a>{" "}
+        &middot; Lost the PIN?{" "}
         <a href={supportMailto("Lost staff PIN")} className="text-teal hover:underline">
           {SUPPORT_EMAIL}
         </a>

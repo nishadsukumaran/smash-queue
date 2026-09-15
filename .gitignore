@@ -5,5 +5,6 @@ out
 *.tsbuildinfo
 next-env.d.ts
 *.log
-.vercel
-Claude outputs/
+
+# built from docs/USER-GUIDE.md by scripts/build-guide.mjs
+src/generated/
