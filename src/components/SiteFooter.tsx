@@ -25,7 +25,7 @@ export function SiteFooter() {
 
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-[.7rem] text-muted sm:ml-auto">
           <span className="chip">
-            {RELEASE_CHANNEL} &middot; {APP_VERSION}
+            {RELEASE_CHANNEL ? `${RELEASE_CHANNEL} · ${APP_VERSION}` : `v${APP_VERSION}`}
           </span>
           <Link href="/guide" className="hover:text-teal">
             Guide

@@ -48,8 +48,8 @@ export default async function Home() {
           The coordinator stays in control. The software handles the headache.
         </p>
         <p className="mt-3 max-w-md text-xs text-muted">
-          This is a beta. If something looks wrong, tell us at{" "}
-          <a href={supportMailto("Beta feedback")} className="text-teal hover:underline">
+          Something not right? Tell us at{" "}
+          <a href={supportMailto("Feedback")} className="text-teal hover:underline">
             {SUPPORT_EMAIL}
           </a>{" "}
           and it gets fixed.

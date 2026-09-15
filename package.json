@@ -1,6 +1,6 @@
 {
   "name": "smash-queue",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0",
   "private": true,
   "description": "Badminton Queue & Game Management Platform \u2014 by AIOps (aiops.ae)",
   "engines": {

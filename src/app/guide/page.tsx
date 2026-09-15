@@ -30,8 +30,8 @@ export default function GuidePage() {
           organises the group. Skim the part that is yours.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <span className="chip chip-amber">
-            {RELEASE_CHANNEL} &middot; {APP_VERSION}
+          <span className={RELEASE_CHANNEL ? "chip chip-amber" : "chip"}>
+            {RELEASE_CHANNEL ? `${RELEASE_CHANNEL} · ${APP_VERSION}` : `v${APP_VERSION}`}
           </span>
           <a href={supportMailto("Question about the guide")} className="chip chip-teal">
             {SUPPORT_EMAIL}

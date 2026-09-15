@@ -2,7 +2,7 @@
 
 **Book. Check in. Queue. Play.**
 
-**Live at [smashq.aiopsgroup.ai](https://smashq.aiopsgroup.ai)** &middot; `Beta 1.0.0-beta.1`
+**Live at [smashq.aiopsgroup.ai](https://smashq.aiopsgroup.ai)** &middot; `v1.0.0`
 &middot; built by [AIOps](https://aiops.ae) &middot; something wrong? **hello@aiops.ae**
 
 One badminton group, one link. Players book from WhatsApp, scan a QR at the door, and
@@ -381,16 +381,16 @@ the board. It lasts for tonight only.
 
 ---
 
-## This is a beta
+## Telling us something is wrong
 
-Everything described here works and is tested, but the app has not yet survived a real
-Saturday with thirty people and bad venue wifi. If something behaves oddly, it is worth
-reporting rather than working around — mail **hello@aiops.ae** with what you were doing and
+Everything described here works and is tested. What has not happened yet is thirty people,
+one Saturday, and bad venue wifi all at once — so if something behaves oddly, it is worth
+reporting rather than working around. Mail **hello@aiops.ae** with what you were doing and
 roughly when, and it gets looked at.
 
-The queue weights in particular are expected to want tuning once a few real sessions have
-been played. If the rotation feels wrong to the people actually on court, that is exactly the
-feedback worth sending.
+The queue weights especially are expected to want tuning once a few real sessions have been
+played. If the rotation feels wrong to the people actually standing on court, that is the
+single most useful thing you can send.
 
 <sub>Built and maintained by [AIOps](https://aiops.ae) — vendor-independent forward deployed
 engineering for the GCC.</sub>

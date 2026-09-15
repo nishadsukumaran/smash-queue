@@ -1,8 +1,9 @@
 /** Single source of truth for product identity, release channel and support. */
 
 export const APP_NAME = "Smash Queue";
-export const APP_VERSION = "1.0.0-beta.1";
-export const RELEASE_CHANNEL = "Beta";
+export const APP_VERSION = "1.0.0";
+/** null on a stable release; a label like "Beta" or "RC" on a prerelease. */
+export const RELEASE_CHANNEL: string | null = null;
 
 export const SUPPORT_EMAIL = "hello@aiops.ae";
 

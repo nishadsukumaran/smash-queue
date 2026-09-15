@@ -11,7 +11,7 @@ import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 export const metadata: Metadata = {
-  title: `${APP_NAME} ${RELEASE_CHANNEL}`,
+  title: RELEASE_CHANNEL ? `${APP_NAME} ${RELEASE_CHANNEL}` : APP_NAME,
   description:
     "Book. Check in. Queue. Play. Badminton session management that runs itself. Built by AIOps.",
   manifest: "/manifest.webmanifest",
@@ -48,9 +48,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 Smash<span className="text-shuttle">Queue</span>
               </span>
             </Link>
-            <span className="chip chip-amber shrink-0" title="Beta release. Things may still change.">
-              {RELEASE_CHANNEL}
-            </span>
+            {RELEASE_CHANNEL && (
+              <span className="chip chip-amber shrink-0" title={`${RELEASE_CHANNEL} release. Things may still change.`}>
+                {RELEASE_CHANNEL}
+              </span>
+            )}
             <div className="ml-auto flex min-w-0 items-center gap-2">
               {staff.length > 0 && <span className="chip chip-teal hidden sm:inline-flex">Staff</span>}
               {user ? (

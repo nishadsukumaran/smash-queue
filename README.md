@@ -4,7 +4,7 @@
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-1.0.0--beta.1-D7F75B?style=for-the-badge&labelColor=0A1A15)](https://github.com/nishadsukumaran/smash-queue/releases)
+[![Version](https://img.shields.io/badge/version-1.0.0-D7F75B?style=for-the-badge&labelColor=0A1A15)](https://github.com/nishadsukumaran/smash-queue/releases)
 [![Live](https://img.shields.io/badge/live-smashq.aiopsgroup.ai-3DD9A4?style=for-the-badge&labelColor=0A1A15)](https://smashq.aiopsgroup.ai)
 [![Tests](https://img.shields.io/badge/tests-38%20passing-3DD9A4?style=for-the-badge&labelColor=0A1A15)](#prove-it-yourself)
 [![Fairness](https://img.shields.io/badge/games%20spread-%E2%89%A4%201-D7F75B?style=for-the-badge&labelColor=0A1A15)](#the-queue-engine)
@@ -356,15 +356,20 @@ The non-technical guide for players and coordinators: **[`docs/USER-GUIDE.md`](d
 
 ---
 
-## Beta — stated plainly
+## What v1.0.0 means, and what it doesn't
 
-This is `1.0.0-beta.1`. Everything in MVP scope works and is tested, but it has not yet run a
-real Saturday night with thirty people and patchy venue wifi, which is the only test that
-really counts. Expect the queue weights to want tuning after the first few sessions.
+Feature-complete against PRD §31, tested, and running in production. What it has not done yet
+is thirty people on a Saturday night with patchy venue wifi — so expect the queue weights to
+want tuning after the first few real sessions. That is tuning, not repair: the engine's
+behaviour is pinned by 38 tests and five simulated session shapes, and a weight change that
+widens the games-played spread shows up in the simulator before it reaches a court.
+
+The limits below are real and stated on purpose. None of them block running a night; all of
+them are worth knowing before you deploy this for someone else.
 
 | Known limit | Impact | Plan |
 | :--- | :--- | :--- |
-| Staff PIN is the only access control | Fine for one trusted group, not for anything public | Proper logins are first after beta |
+| Staff PIN is the only access control | Fine for one trusted group, not for anything public | Proper logins are the next thing on the list |
 | Live screens poll every 5–6 s | Noticeable if you stare at the board, not while running a session | Push in Phase 2 |
 | Player score confirmation off by default | In the data model, switched off | Enable per group |
 | No interactive transactions over Neon HTTP | Costs nothing today — every write is a single statement | Check before adding a multi-statement atomic write |
