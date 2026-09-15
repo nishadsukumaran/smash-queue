@@ -61,16 +61,20 @@ Import the GitHub repo and set these environment variables:
 | --- | --- |
 | `DATABASE_URL` | Neon pooled connection string |
 | `QR_SECRET` | `openssl rand -base64 32` |
-| `NEXT_PUBLIC_BASE_URL` | `https://your-domain` — **no trailing slash** |
+| `APP_BASE_URL` | *leave unset* — see below |
 | `NEXT_PUBLIC_TIME_ZONE` | `Asia/Dubai` |
 
-Two of those are easy to get wrong and both fail quietly:
+**`APP_BASE_URL` should normally be left unset.** QR codes are built from the origin
+the request actually arrived on, so they are correct on production, on every preview
+deployment, and on a custom domain the day you add one — without anybody remembering to
+update a variable. Set it only behind a proxy that rewrites the `Host` header, and then get
+it exactly right: a wrong value points every printed QR code at the wrong host, and it fails
+silently.
 
-- **`NEXT_PUBLIC_BASE_URL`** is what QR codes and share links are built from. Point it at the
-  wrong host and every QR code at the venue silently sends people somewhere else.
-- **`NEXT_PUBLIC_TIME_ZONE`** decides the wall clock times are rendered in. Timestamps are
-  stored as instants, so the data is always right — but a Vercel function runs in UTC, and
-  without this a 19:54 check-in displays as 15:54 to everyone.
+**`NEXT_PUBLIC_TIME_ZONE` is the one that will bite you.** It decides the wall clock times
+are rendered in. Timestamps are stored as instants so the data is always right, but a Vercel
+function runs in UTC, and without this a 19:54 check-in displays as 15:54 to everyone — a
+number plausible enough that nobody questions it.
 
 ---
 

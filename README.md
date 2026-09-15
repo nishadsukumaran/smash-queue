@@ -184,7 +184,7 @@ usage grows.
 | --- | --- | --- |
 | `DATABASE_URL` | none | Neon Postgres connection string, required |
 | `QR_SECRET` | dev fallback | **set this before sharing a real session** |
-| `NEXT_PUBLIC_BASE_URL` | `http://localhost:3000` | used in QR codes and share links |
+| `APP_BASE_URL` | derived from the request | optional override; QR codes normally follow the domain they are served from |
 | `NEXT_PUBLIC_TIME_ZONE` | `Asia/Dubai` | wall clock times render in; a UTC server shows Gulf check-ins four hours early without it |
 | `PORT` | `3000` | `PORT=3210 npm run dev` when 3000 is taken |
 

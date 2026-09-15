@@ -18,15 +18,15 @@ vercel whoami >/dev/null 2>&1 || { echo "Not logged in. Run: vercel login"; exit
 
 set -a; . "./$ENV_FILE"; set +a
 
-for var in DATABASE_URL QR_SECRET NEXT_PUBLIC_BASE_URL NEXT_PUBLIC_TIME_ZONE; do
+for var in DATABASE_URL QR_SECRET NEXT_PUBLIC_TIME_ZONE; do
   [ -n "${!var:-}" ] || { echo "$var is empty in $ENV_FILE"; exit 1; }
 done
 
 echo "==> Linking the Vercel project"
-vercel link --yes --project smash-queue >/dev/null
+vercel link --yes --project "${VERCEL_PROJECT:-smashqueue}" >/dev/null
 
 echo "==> Pushing environment variables"
-for var in DATABASE_URL QR_SECRET NEXT_PUBLIC_BASE_URL NEXT_PUBLIC_TIME_ZONE; do
+for var in DATABASE_URL QR_SECRET NEXT_PUBLIC_TIME_ZONE; do
   # Remove first so a re-run updates rather than erroring on a duplicate.
   vercel env rm "$var" production --yes >/dev/null 2>&1 || true
   printf '%s' "${!var}" | vercel env add "$var" production >/dev/null
@@ -38,5 +38,5 @@ URL=$(vercel deploy --prod --yes)
 echo
 echo "Live at: $URL"
 echo
-echo "If NEXT_PUBLIC_BASE_URL does not match that host, update it and redeploy —"
-echo "every QR code is built from it."
+echo "QR codes follow whatever domain the app is served from, so there is no"
+echo "base URL to keep in sync."

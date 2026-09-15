@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { StaffGate } from "@/components/StaffGate";
 import { getSessionByCode } from "@/server/queries";
 import { signCheckInToken } from "@/lib/qr";
+import { requestOrigin } from "@/lib/origin";
 import { prettyDate, prettyTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ async function Qr({ code }: { code: string }) {
   const session = await getSessionByCode(code);
   if (!session) notFound();
 
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+  const base = await requestOrigin();
   const token = signCheckInToken(session.id);
   const url = `${base}/s/${session.code}/checkin?t=${encodeURIComponent(token)}`;
 
