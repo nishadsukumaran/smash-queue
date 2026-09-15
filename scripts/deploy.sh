@@ -16,6 +16,9 @@ command -v vercel >/dev/null || { echo "vercel CLI not found: npm i -g vercel"; 
 vercel whoami >/dev/null 2>&1 || { echo "Not logged in. Run: vercel login"; exit 1; }
 [ -f "$ENV_FILE" ] || { echo "Missing $ENV_FILE (see .env.example)"; exit 1; }
 
+# Values must be quoted in the env file: a Neon connection string contains '&',
+# and unquoted that is a background operator, so the assignment silently
+# evaporates and you deploy with an empty DATABASE_URL.
 set -a; . "./$ENV_FILE"; set +a
 
 for var in DATABASE_URL QR_SECRET NEXT_PUBLIC_TIME_ZONE; do
@@ -27,9 +30,15 @@ vercel link --yes --project "${VERCEL_PROJECT:-smashqueue}" >/dev/null
 
 echo "==> Pushing environment variables"
 for var in DATABASE_URL QR_SECRET NEXT_PUBLIC_TIME_ZONE; do
-  # Remove first so a re-run updates rather than erroring on a duplicate.
-  vercel env rm "$var" production --yes >/dev/null 2>&1 || true
-  printf '%s' "${!var}" | vercel env add "$var" production >/dev/null
+  value="${!var}"
+  [ -n "$value" ] || { echo "$var resolved empty - check quoting in $ENV_FILE"; exit 1; }
+  for envn in production preview development; do
+    # --value keeps this non-interactive; recent CLI versions prompt for
+    # sensitivity when the value arrives on stdin.
+    extra=""; [ "$envn" != "development" ] && extra="--sensitive"
+    vercel env add "$var" "$envn" --value "$value" --force --yes $extra >/dev/null 2>&1 \
+      || vercel env add "$var" "$envn" --value "$value" --force --yes >/dev/null 2>&1
+  done
   echo "    $var set"
 done
 
