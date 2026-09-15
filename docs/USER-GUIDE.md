@@ -2,8 +2,8 @@
 
 **Book. Check in. Queue. Play.**
 
-`Beta 1.0.0-beta.1` &middot; built by [AIOps](https://aiops.ae) &middot; something wrong?
-**hello@aiops.ae**
+**Live at [smashqueue.vercel.app](https://smashqueue.vercel.app)** &middot; `Beta 1.0.0-beta.1`
+&middot; built by [AIOps](https://aiops.ae) &middot; something wrong? **hello@aiops.ae**
 
 One badminton group, one link. Players book from WhatsApp, scan a QR at the door, and
 their phone tells them when they're next. The coordinator runs the whole night from one
@@ -25,7 +25,8 @@ screen and stops being the person everybody asks "when am I playing?"
 
 ## 1. The five-minute version
 
-**Tuesday** — organizer creates the session, copies the link, drops it in WhatsApp.
+**Tuesday** — organizer opens [smashqueue.vercel.app/admin](https://smashqueue.vercel.app/admin),
+creates the session, copies the link, drops it in WhatsApp.
 
 **Tuesday to Saturday** — players tap *Join session*. Once it's full, the next taps land
 on the waitlist. Somebody cancels, the top of the waitlist moves up automatically and
@@ -200,8 +201,10 @@ summary.
 **Organizer → New session**. Name, date, start and end time, venue, number of courts, max
 players, fee, game type, points per game.
 
-You get a short code like `NEXTSA` and a link ending `/s/NEXTSA`. That's what goes in
-WhatsApp. The QR check-in code is generated from the same session automatically.
+You get a short code and a link like `smashqueue.vercel.app/s/K4M2XP`. That's what goes in
+WhatsApp. The QR check-in code is generated from the same session automatically, and it
+always points at whatever domain the app is served from — so it stays correct if the address
+ever changes.
 
 **Game type** is worth a thought:
 
@@ -245,8 +248,12 @@ who plays with whom most often.
 
 ### Changing the PIN
 
-It lives in the group's settings row in the database (`groups.settings.staffPin`). The
-seeded demo PIN is `1234`. Change it before you use this for real.
+**Organizer → Members → Group**. Type a new 4 to 8 digit PIN and save. Nobody gets signed
+out: a coordinator who already unlocked their phone stays unlocked until they tap **Lock**.
+
+Change it when a coordinator stops helping out, and change it from the one you were given
+at setup before you hand it to anybody else. The PIN is currently the only thing between a
+curious player and the payments screen.
 
 ---
 
@@ -370,6 +377,7 @@ the board. It lasts for tonight only.
 | Add a member | Organizer → Members |
 | See the leaderboard | Organizer → Statistics |
 | Report something broken | hello@aiops.ae |
+| Open the app | smashqueue.vercel.app |
 
 ---
 
