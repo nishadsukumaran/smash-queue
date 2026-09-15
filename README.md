@@ -5,7 +5,7 @@
 <br>
 
 [![Version](https://img.shields.io/badge/version-1.0.0--beta.1-D7F75B?style=for-the-badge&labelColor=0A1A15)](https://github.com/nishadsukumaran/smash-queue/releases)
-[![Live](https://img.shields.io/badge/live-smashqueue.vercel.app-3DD9A4?style=for-the-badge&labelColor=0A1A15)](https://smashqueue.vercel.app)
+[![Live](https://img.shields.io/badge/live-smashq.aiopsgroup.ai-3DD9A4?style=for-the-badge&labelColor=0A1A15)](https://smashq.aiopsgroup.ai)
 [![Tests](https://img.shields.io/badge/tests-38%20passing-3DD9A4?style=for-the-badge&labelColor=0A1A15)](#prove-it-yourself)
 [![Fairness](https://img.shields.io/badge/games%20spread-%E2%89%A4%201-D7F75B?style=for-the-badge&labelColor=0A1A15)](#the-queue-engine)
 
@@ -351,7 +351,7 @@ phone with one bar of signal in a sports hall.
 | `PORT` | `3000` | `PORT=3210 npm run dev` when 3000 is taken |
 
 Hosting, schema changes after launch, and what to watch as usage grows: **[`docs/DEPLOYING.md`](docs/DEPLOYING.md)**.
-The non-technical guide for players and coordinators: **[`docs/USER-GUIDE.md`](docs/USER-GUIDE.md)** (also live at [`/guide`](https://smashqueue.vercel.app/guide)).
+The non-technical guide for players and coordinators: **[`docs/USER-GUIDE.md`](docs/USER-GUIDE.md)** (also live at [`/guide`](https://smashq.aiopsgroup.ai/guide)).
 
 ---
 
