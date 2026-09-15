@@ -10,16 +10,16 @@
     "dev": "next dev -p ${PORT:-3000}",
     "build": "next build",
     "start": "next start -p ${PORT:-3000}",
-    "lint": "next lint",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
-    "db:reset": "rm -f data/smash.db && npm run db:push && npm run db:seed",
+    "db:bootstrap": "tsx src/db/bootstrap.ts",
     "setup": "npm run db:push && npm run db:seed",
     "test": "tsx src/lib/__tests__/run.ts",
     "sim": "tsx src/lib/__tests__/simulate.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
+    "@neondatabase/serverless": "^1.1.0",
+    "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "next": "^16.3.5",
     "qrcode": "^1.5.4",
@@ -28,7 +28,6 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.11",
-    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.15.0",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19.3.0",

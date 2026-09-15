@@ -1,7 +1,9 @@
 import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getGroup, listMembers } from "@/server/queries";
-import { addMemberAction, memberActiveAction, memberRoleAction, selfSignupAction } from "@/server/form-actions";
+import {
+  addMemberAction, memberActiveAction, memberRoleAction, selfSignupAction, updateGroupAction,
+} from "@/server/form-actions";
 import { ratingBand } from "@/lib/fairness";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +17,36 @@ export default async function MembersPage() {
 
   return (
     <div className="space-y-4">
+      <section className="card p-4">
+        <h2 className="label">Group</h2>
+        <form action={updateGroupAction} className="mt-3 grid gap-2 sm:grid-cols-4">
+          <input type="hidden" name="groupId" value={group.id} />
+          <label className="block sm:col-span-2">
+            <span className="label">Name</span>
+            <input className="input mt-1" name="name" defaultValue={group.name} required />
+          </label>
+          <label className="block">
+            <span className="label">Default fee ({group.currency})</span>
+            <input className="input mt-1" name="defaultFee" type="number" min={0} step={5} defaultValue={group.defaultFee} />
+          </label>
+          <label className="block">
+            <span className="label">Staff PIN</span>
+            <input className="input mt-1" name="staffPin" inputMode="numeric" placeholder="unchanged" maxLength={8} autoComplete="off" />
+          </label>
+          <label className="block sm:col-span-3">
+            <span className="label">Location</span>
+            <input className="input mt-1" name="location" defaultValue={group.location ?? ""} />
+          </label>
+          <div className="flex items-end">
+            <SubmitButton className="btn btn-primary w-full">Save</SubmitButton>
+          </div>
+        </form>
+        <p className="mt-2 text-xs text-muted">
+          Changing the PIN signs nobody out. Coordinators who already unlocked this phone stay
+          unlocked until they lock it.
+        </p>
+      </section>
+
       <section className="card p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">

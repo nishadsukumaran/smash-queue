@@ -1,43 +1,44 @@
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  pgTable, text, integer, doublePrecision, boolean, timestamp, jsonb, index, uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 /**
  * Schema for the Badminton Queue & Game Management Platform.
  *
- * Written in the SQLite dialect so the whole thing runs from a single file
- * with zero infrastructure. Every table maps 1:1 onto the Postgres DDL in
- * docs/MIGRATE-TO-SUPABASE.md, so moving to Supabase later is a swap of the
- * driver plus that one migration file.
+ * Postgres, served by Neon over HTTP so it works the same in a Vercel function
+ * and in a local script. Timestamps are timestamptz: the database stores the
+ * instant, and src/lib/format.ts decides which wall clock to render it in.
  */
 
 const id = () => text("id").primaryKey();
-const ts = (name: string) => integer(name, { mode: "timestamp_ms" });
+const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
 /* ------------------------------------------------------------------ users */
 
-export const users = sqliteTable("users", {
+export const users = pgTable("users", {
   id: id(),
   name: text("name").notNull(),
   phone: text("phone"),
   email: text("email"),
   avatarColor: text("avatar_color").notNull().default("#3DD9A4"),
   /** Doubles Elo. 1200 = a brand new player with no history. */
-  rating: real("rating").notNull().default(1200),
+  rating: doublePrecision("rating").notNull().default(1200),
   ratingGames: integer("rating_games").notNull().default(0),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  active: boolean("active").notNull().default(true),
   createdAt: ts("created_at").notNull(),
 });
 
 /* ----------------------------------------------------------------- groups */
 
-export const groups = sqliteTable("groups", {
+export const groups = pgTable("groups", {
   id: id(),
   name: text("name").notNull(),
   ownerId: text("owner_id").notNull().references(() => users.id),
   location: text("location"),
-  defaultFee: real("default_fee").notNull().default(40),
+  defaultFee: doublePrecision("default_fee").notNull().default(40),
   currency: text("currency").notNull().default("AED"),
   /** JSON: default queue weights, game type, points-to, staff PIN. */
-  settings: text("settings", { mode: "json" }).$type<GroupSettings>().notNull(),
+  settings: jsonb("settings").$type<GroupSettings>().notNull(),
   createdAt: ts("created_at").notNull(),
 });
 
@@ -67,7 +68,7 @@ export type QueueWeights = {
 
 export type GameType = "casual" | "balanced" | "competitive" | "social";
 
-export const groupMembers = sqliteTable(
+export const groupMembers = pgTable(
   "group_members",
   {
     id: id(),
@@ -84,7 +85,7 @@ export type MemberRole = "player" | "coordinator" | "organizer";
 
 /* ----------------------------------------------------------------- venues */
 
-export const venues = sqliteTable("venues", {
+export const venues = pgTable("venues", {
   id: id(),
   groupId: text("group_id").notNull().references(() => groups.id),
   name: text("name").notNull(),
@@ -94,7 +95,7 @@ export const venues = sqliteTable("venues", {
 
 /* --------------------------------------------------------------- sessions */
 
-export const sessions = sqliteTable(
+export const sessions = pgTable(
   "sessions",
   {
     id: id(),
@@ -109,7 +110,7 @@ export const sessions = sqliteTable(
     endTime: text("end_time").notNull(),
     courtCount: integer("court_count").notNull().default(4),
     capacity: integer("capacity").notNull().default(24),
-    fee: real("fee").notNull().default(40),
+    fee: doublePrecision("fee").notNull().default(40),
     currency: text("currency").notNull().default("AED"),
     notes: text("notes"),
     coordinatorId: text("coordinator_id").references(() => users.id),
@@ -117,7 +118,7 @@ export const sessions = sqliteTable(
     gameType: text("game_type").$type<GameType>().notNull().default("casual"),
     pointsTo: integer("points_to").notNull().default(30),
     queueMode: text("queue_mode").$type<QueueMode>().notNull().default("assisted"),
-    weights: text("weights", { mode: "json" }).$type<QueueWeights>().notNull(),
+    weights: jsonb("weights").$type<QueueWeights>().notNull(),
     createdAt: ts("created_at").notNull(),
     closedAt: ts("closed_at"),
   },
@@ -129,7 +130,7 @@ export type QueueMode = "auto" | "assisted" | "manual";
 
 /* --------------------------------------------------------------- bookings */
 
-export const bookings = sqliteTable(
+export const bookings = pgTable(
   "bookings",
   {
     id: id(),
@@ -147,7 +148,7 @@ export type BookingStatus = "confirmed" | "waitlisted" | "cancelled" | "no_show"
 
 /* --------------------------------------------------------------- check-in */
 
-export const checkIns = sqliteTable(
+export const checkIns = pgTable(
   "check_ins",
   {
     id: id(),
@@ -169,7 +170,7 @@ export type Availability = "available" | "resting" | "left";
 
 /* ---------------------------------------------------------------- matches */
 
-export const matches = sqliteTable(
+export const matches = pgTable(
   "matches",
   {
     id: id(),
@@ -187,7 +188,7 @@ export const matches = sqliteTable(
 
 export type MatchStatus = "pending" | "playing" | "completed" | "cancelled";
 
-export const matchPlayers = sqliteTable(
+export const matchPlayers = pgTable(
   "match_players",
   {
     id: id(),
@@ -198,7 +199,7 @@ export const matchPlayers = sqliteTable(
   (t) => [index("mp_match_idx").on(t.matchId), index("mp_user_idx").on(t.userId)],
 );
 
-export const matchScores = sqliteTable("match_scores", {
+export const matchScores = pgTable("match_scores", {
   id: id(),
   matchId: text("match_id").notNull().references(() => matches.id),
   teamAScore: integer("team_a_score").notNull(),
@@ -206,18 +207,18 @@ export const matchScores = sqliteTable("match_scores", {
   winner: text("winner").$type<"A" | "B" | "none">().notNull(),
   enteredBy: text("entered_by").references(() => users.id),
   enteredAt: ts("entered_at").notNull(),
-  confirmed: integer("confirmed", { mode: "boolean" }).notNull().default(false),
+  confirmed: boolean("confirmed").notNull().default(false),
 });
 
 /* --------------------------------------------------------------- payments */
 
-export const payments = sqliteTable(
+export const payments = pgTable(
   "payments",
   {
     id: id(),
     sessionId: text("session_id").notNull().references(() => sessions.id),
     userId: text("user_id").notNull().references(() => users.id),
-    amount: real("amount").notNull(),
+    amount: doublePrecision("amount").notNull(),
     status: text("status").$type<PaymentStatus>().notNull().default("unpaid"),
     method: text("method").$type<PaymentMethod | null>(),
     paidAt: ts("paid_at"),
@@ -229,16 +230,16 @@ export const payments = sqliteTable(
 export type PaymentStatus = "unpaid" | "paid" | "waived";
 export type PaymentMethod = "cash" | "transfer" | "online";
 
-export const sessionCosts = sqliteTable("session_costs", {
+export const sessionCosts = pgTable("session_costs", {
   id: id(),
   sessionId: text("session_id").notNull().references(() => sessions.id),
   label: text("label").notNull(),
-  amount: real("amount").notNull(),
+  amount: doublePrecision("amount").notNull(),
 });
 
 /* ------------------------------------------------- preferences & auditing */
 
-export const preferences = sqliteTable(
+export const preferences = pgTable(
   "preferences",
   {
     id: id(),
@@ -252,23 +253,23 @@ export const preferences = sqliteTable(
 );
 
 /** Silent record of every time a coordinator changed what the engine suggested. */
-export const overrides = sqliteTable(
+export const overrides = pgTable(
   "overrides",
   {
     id: id(),
     sessionId: text("session_id").notNull().references(() => sessions.id),
     matchId: text("match_id").references(() => matches.id),
-    recommended: text("recommended", { mode: "json" }).$type<string[]>().notNull(),
-    final: text("final", { mode: "json" }).$type<string[]>().notNull(),
-    addedIds: text("added_ids", { mode: "json" }).$type<string[]>().notNull(),
-    removedIds: text("removed_ids", { mode: "json" }).$type<string[]>().notNull(),
+    recommended: jsonb("recommended").$type<string[]>().notNull(),
+    final: jsonb("final").$type<string[]>().notNull(),
+    addedIds: jsonb("added_ids").$type<string[]>().notNull(),
+    removedIds: jsonb("removed_ids").$type<string[]>().notNull(),
     createdAt: ts("created_at").notNull(),
   },
   (t) => [index("overrides_session_idx").on(t.sessionId)],
 );
 
 /** In-app notification feed. Phase 2 swaps the writer for push / WhatsApp. */
-export const notifications = sqliteTable(
+export const notifications = pgTable(
   "notifications",
   {
     id: id(),

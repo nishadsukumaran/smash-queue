@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   bookings, checkIns, groupMembers, groups, matchPlayers, matchScores, matches,
-  payments, preferences, sessionCosts, sessions, users, venues,
+  overrides, payments, preferences, sessionCosts, sessions, users, venues,
   type Availability, type BookingStatus, type PaymentStatus,
 } from "@/db/schema";
 import {
@@ -406,9 +406,9 @@ export async function getSessionSummary(sessionId: string): Promise<SessionSumma
   const [costs, overrideRows] = await Promise.all([
     db.select().from(sessionCosts).where(eq(sessionCosts.sessionId, sessionId)),
     db
-      .select({ n: sql<number>`count(*)` })
-      .from(sql`overrides`)
-      .where(sql`session_id = ${sessionId}`),
+      .select({ n: sql<number>`count(*)::int` })
+      .from(overrides)
+      .where(eq(overrides.sessionId, sessionId)),
   ]);
 
   const checkedIn = board.roster.filter((r) => r.checkedInAt);

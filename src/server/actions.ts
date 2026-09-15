@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
@@ -176,6 +176,31 @@ export async function registerPlayer(
   await setCurrentUserId(userId);
   touch();
   return { ok: true, id: userId, message: `Welcome, ${clean.split(" ")[0]}` };
+}
+
+export async function updateGroup(
+  groupId: string,
+  patch: { name?: string; location?: string; defaultFee?: number; staffPin?: string },
+): Promise<Result> {
+  const rows = await db.select().from(groups).where(eq(groups.id, groupId));
+  const group = rows[0];
+  if (!group) return { ok: false, message: "Group not found" };
+
+  const next: Record<string, unknown> = {};
+  if (patch.name?.trim()) next.name = patch.name.trim();
+  if (patch.location !== undefined) next.location = patch.location.trim() || null;
+  if (patch.defaultFee !== undefined && Number.isFinite(patch.defaultFee))
+    next.defaultFee = Math.max(0, patch.defaultFee);
+
+  if (patch.staffPin) {
+    const pin = patch.staffPin.trim();
+    if (!/^\d{4,8}$/.test(pin)) return { ok: false, message: "PIN must be 4 to 8 digits" };
+    next.settings = { ...group.settings, staffPin: pin };
+  }
+
+  if (Object.keys(next).length) await db.update(groups).set(next).where(eq(groups.id, groupId));
+  touch();
+  return { ok: true };
 }
 
 export async function setSelfSignup(groupId: string, allow: boolean) {
@@ -751,12 +776,12 @@ export async function finishMatch(
   // Everyone who sat this one out gets their counter walked back down.
   await db
     .update(checkIns)
-    .set({ consecutiveGames: sql`max(0, ${checkIns.consecutiveGames} - 1)` })
+    .set({ consecutiveGames: sql`greatest(0, ${checkIns.consecutiveGames} - 1)` })
     .where(
       and(
         eq(checkIns.sessionId, match.sessionId),
         eq(checkIns.availability, "available"),
-        sql`${checkIns.userId} not in (${sql.join(playerIds.map((id) => sql`${id}`), sql`, `)})`,
+        notInArray(checkIns.userId, playerIds),
       ),
     );
 

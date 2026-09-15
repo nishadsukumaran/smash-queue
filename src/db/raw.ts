@@ -1,14 +1,9 @@
-/** Script-side (non-Next) connection used by seeds, tests and the simulator. */
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+/** Script-side connection used by the seed, the bootstrap and the simulator. */
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "./schema";
 
-export function openDb(url = process.env.DATABASE_URL ?? "./data/smash.db") {
-  const file = resolve(process.cwd(), url);
-  mkdirSync(dirname(file), { recursive: true });
-  const sqlite = new Database(file);
-  sqlite.pragma("journal_mode = WAL");
-  return { db: drizzle(sqlite, { schema }), sqlite };
+export function openDb(url = process.env.DATABASE_URL) {
+  if (!url) throw new Error("DATABASE_URL is not set.");
+  return { db: drizzle(neon(url), { schema }) };
 }

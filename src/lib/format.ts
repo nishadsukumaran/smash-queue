@@ -1,3 +1,12 @@
+/**
+ * The group's wall-clock timezone.
+ *
+ * Every timestamp here is rendered on the server. Left to its own devices a
+ * server formats in ITS locale, which is UTC on Vercel - so a 19:54 check-in
+ * in Abu Dhabi would display as 15:54 to everyone. Pin it explicitly.
+ */
+export const TIME_ZONE = process.env.NEXT_PUBLIC_TIME_ZONE || "Asia/Dubai";
+
 export function money(amount: number, currency = "AED") {
   return `${currency} ${amount.toLocaleString("en-AE", { maximumFractionDigits: 0 })}`;
 }
@@ -11,7 +20,11 @@ export function initials(name: string) {
 export function clockTime(ts: number | Date | null | undefined) {
   if (!ts) return "--:--";
   const d = ts instanceof Date ? ts : new Date(ts);
-  return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: TIME_ZONE,
+  });
 }
 
 export function minutesSince(ts: number | Date | null | undefined, now = Date.now()) {
@@ -28,8 +41,15 @@ export function duration(ms: number) {
 }
 
 export function prettyDate(iso: string) {
-  const d = new Date(`${iso}T00:00:00`);
-  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  // Noon UTC lands on the same calendar day everywhere from UTC-11 to UTC+11,
+  // so a plain date string never slips a day depending on who renders it.
+  const d = new Date(`${iso}T12:00:00Z`);
+  return d.toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: TIME_ZONE,
+  });
 }
 
 /** 19:00 -> 7:00 PM */

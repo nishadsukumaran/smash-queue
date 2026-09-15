@@ -198,6 +198,15 @@ export async function registerPlayerAction(
   return { ok: false, message: res.message, duplicate: res.duplicate };
 }
 
+export async function updateGroupAction(fd: FormData) {
+  await a.updateGroup(str(fd, "groupId"), {
+    name: str(fd, "name"),
+    location: str(fd, "location"),
+    defaultFee: fd.get("defaultFee") !== null ? num(fd, "defaultFee", 0) : undefined,
+    staffPin: str(fd, "staffPin") || undefined,
+  });
+}
+
 export async function selfSignupAction(fd: FormData) {
   await a.setSelfSignup(str(fd, "groupId"), str(fd, "allow") === "1");
 }

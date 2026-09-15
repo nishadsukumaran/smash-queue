@@ -1,4 +1,5 @@
-import { sql } from "drizzle-orm";
+import "./env";
+import { eq } from "drizzle-orm";
 import { openDb } from "./raw";
 import {
   bookings, checkIns, groupMembers, groups, matchPlayers, matchScores, matches,
@@ -10,7 +11,7 @@ import { simulateSession, type SimPlayer } from "@/lib/sim";
 import { updateRatings } from "@/lib/fairness";
 import { DEFAULT_WEIGHTS, BALANCE_BY_TYPE } from "@/lib/queue-engine";
 
-const { db, sqlite } = openDb();
+const { db } = openDb();
 
 const ROSTER: Array<[string, number]> = [
   ["Nishad Sukumaran", 1340], ["Arun Menon", 1285], ["Nikhil Varma", 1410],
@@ -35,17 +36,19 @@ function at(dateIso: string, hhmm: string) {
   return new Date(`${dateIso}T${hhmm}:00`).getTime();
 }
 
-function wipe() {
-  const tables = [
-    "notifications", "overrides", "preferences", "session_costs", "payments",
-    "match_scores", "match_players", "matches", "check_ins", "bookings",
-    "sessions", "venues", "group_members", "groups", "users",
-  ];
-  for (const t of tables) sqlite.prepare(`DELETE FROM ${t}`).run();
+/** Child rows first: the foreign keys are real in Postgres. */
+async function wipe() {
+  for (const table of [
+    notifications, overrides, preferences, sessionCosts, payments,
+    matchScores, matchPlayers, matches, checkIns, bookings,
+    sessions, venues, groupMembers, groups, users,
+  ]) {
+    await db.delete(table);
+  }
 }
 
 async function main() {
-  wipe();
+  await wipe();
   const now = new Date();
 
   /* ------------------------------------------------------------- people */
@@ -61,12 +64,12 @@ async function main() {
     active: true,
     createdAt: now,
   }));
-  db.insert(users).values(people).run();
+  await db.insert(users).values(people);
 
   const owner = people[0];
 
   const groupId = newId("grp");
-  db.insert(groups)
+  await db.insert(groups)
     .values({
       id: groupId,
       name: "Abu Dhabi Smashers",
@@ -83,10 +86,9 @@ async function main() {
         allowSelfSignup: true,
       },
       createdAt: now,
-    })
-    .run();
+    });
 
-  db.insert(groupMembers)
+  await db.insert(groupMembers)
     .values(
       people.map((p, i) => ({
         id: newId("gm"),
@@ -96,12 +98,11 @@ async function main() {
         status: "active" as const,
         joinedAt: now,
       })),
-    )
-    .run();
+    );
 
   const venueId = newId("ven");
   const venueId2 = newId("ven");
-  db.insert(venues)
+  await db.insert(venues)
     .values([
       {
         id: venueId,
@@ -117,8 +118,7 @@ async function main() {
         address: "Al Bateen, Abu Dhabi",
         courtCount: 3,
       },
-    ])
-    .run();
+    ]);
 
   const ratings = new Map(people.map((p) => [p.id, p.rating]));
   const ratingGames = new Map(people.map((p) => [p.id, 0]));
@@ -131,13 +131,13 @@ async function main() {
     { offset: -7, attendees: 22, courts: 4 },
   ];
 
-  past.forEach((cfg, index) => {
+  for (const [index, cfg] of past.entries()) {
     const date = isoDate(cfg.offset);
     const startMs = at(date, "19:00");
     const sessionId = newId("ses");
     const attendees = people.slice(0, cfg.attendees);
 
-    db.insert(sessions)
+    await db.insert(sessions)
       .values({
         id: sessionId,
         groupId,
@@ -160,10 +160,9 @@ async function main() {
         weights: { ...DEFAULT_WEIGHTS, balance: BALANCE_BY_TYPE.balanced },
         createdAt: new Date(startMs - 5 * 86400000),
         closedAt: new Date(startMs + 3 * 3600000),
-      })
-      .run();
+      });
 
-    db.insert(bookings)
+    await db.insert(bookings)
       .values(
         attendees.map((p) => ({
           id: newId("bkg"),
@@ -174,10 +173,9 @@ async function main() {
           bookedAt: new Date(startMs - 3 * 86400000),
           cancelledAt: null,
         })),
-      )
-      .run();
+      );
 
-    db.insert(checkIns)
+    await db.insert(checkIns)
       .values(
         attendees.map((p, i) => ({
           id: newId("chk"),
@@ -190,8 +188,7 @@ async function main() {
           lastFinishedAt: null,
           consecutiveGames: 0,
         })),
-      )
-      .run();
+      );
 
     const simPlayers: SimPlayer[] = attendees.map((p) => ({
       id: p.id,
@@ -208,7 +205,7 @@ async function main() {
 
     for (const m of result.matches) {
       const matchId = newId("mtc");
-      db.insert(matches)
+      await db.insert(matches)
         .values({
           id: matchId,
           sessionId,
@@ -219,15 +216,13 @@ async function main() {
           createdAt: new Date(m.startedAt - 30000),
           startedAt: new Date(m.startedAt),
           finishedAt: new Date(m.finishedAt),
-        })
-        .run();
-      db.insert(matchPlayers)
+        });
+      await db.insert(matchPlayers)
         .values([
           ...m.teamA.map((userId) => ({ id: newId("mp"), matchId, userId, team: "A" as const })),
           ...m.teamB.map((userId) => ({ id: newId("mp"), matchId, userId, team: "B" as const })),
-        ])
-        .run();
-      db.insert(matchScores)
+        ]);
+      await db.insert(matchScores)
         .values({
           id: newId("scr"),
           matchId,
@@ -237,8 +232,7 @@ async function main() {
           enteredBy: owner.id,
           enteredAt: new Date(m.finishedAt),
           confirmed: true,
-        })
-        .run();
+        });
 
       const input = [
         ...m.teamA.map((id) => ({
@@ -255,7 +249,7 @@ async function main() {
       }
     }
 
-    db.insert(payments)
+    await db.insert(payments)
       .values(
         attendees.map((p, i) => ({
           id: newId("pay"),
@@ -267,23 +261,20 @@ async function main() {
           paidAt: i % 11 === 0 ? null : new Date(startMs + 3600000),
           recordedBy: owner.id,
         })),
-      )
-      .run();
+      );
 
-    db.insert(sessionCosts)
+    await db.insert(sessionCosts)
       .values([
         { id: newId("cst"), sessionId, label: "Court hire", amount: 600 },
         { id: newId("cst"), sessionId, label: "Shuttles", amount: 150 },
         { id: newId("cst"), sessionId, label: "Water and misc", amount: 50 },
-      ])
-      .run();
-  });
+      ]);
+  }
 
   for (const p of people)
-    db.update(users)
+    await db.update(users)
       .set({ rating: ratings.get(p.id)!, ratingGames: ratingGames.get(p.id)! })
-      .where(sql`id = ${p.id}`)
-      .run();
+      .where(eq(users.id, p.id));
 
   /* ------------------------------------------------ tonight, mid-session */
 
@@ -293,7 +284,7 @@ async function main() {
   const liveAttendees = people.slice(0, 24);
   const liveBooked = people.slice(0, 26); // two booked and never showed
 
-  db.insert(sessions)
+  await db.insert(sessions)
     .values({
       id: liveId,
       groupId,
@@ -316,10 +307,9 @@ async function main() {
       weights: { ...DEFAULT_WEIGHTS, balance: BALANCE_BY_TYPE.balanced },
       createdAt: new Date(liveStart - 4 * 86400000),
       closedAt: null,
-    })
-    .run();
+    });
 
-  db.insert(bookings)
+  await db.insert(bookings)
     .values(
       liveBooked.map((p) => ({
         id: newId("bkg"),
@@ -330,8 +320,7 @@ async function main() {
         bookedAt: new Date(liveStart - 3 * 86400000),
         cancelledAt: null,
       })),
-    )
-    .run();
+    );
 
   const liveSim = simulateSession(
     liveAttendees.map((p) => ({ id: p.id, name: p.name, rating: ratings.get(p.id) ?? 1200 })),
@@ -345,7 +334,7 @@ async function main() {
 
   for (const m of finished) {
     const matchId = newId("mtc");
-    db.insert(matches)
+    await db.insert(matches)
       .values({
         id: matchId,
         sessionId: liveId,
@@ -356,15 +345,13 @@ async function main() {
         createdAt: new Date(m.startedAt - 30000),
         startedAt: new Date(m.startedAt),
         finishedAt: new Date(m.finishedAt),
-      })
-      .run();
-    db.insert(matchPlayers)
+      });
+    await db.insert(matchPlayers)
       .values([
         ...m.teamA.map((userId) => ({ id: newId("mp"), matchId, userId, team: "A" as const })),
         ...m.teamB.map((userId) => ({ id: newId("mp"), matchId, userId, team: "B" as const })),
-      ])
-      .run();
-    db.insert(matchScores)
+      ]);
+    await db.insert(matchScores)
       .values({
         id: newId("scr"),
         matchId,
@@ -374,8 +361,7 @@ async function main() {
         enteredBy: owner.id,
         enteredAt: new Date(m.finishedAt),
         confirmed: true,
-      })
-      .run();
+      });
     for (const id of [...m.teamA, ...m.teamB]) {
       lastFinish.set(id, m.finishedAt);
       consecutive.set(id, (consecutive.get(id) ?? 0) + 1);
@@ -384,7 +370,7 @@ async function main() {
 
   for (const m of running) {
     const matchId = newId("mtc");
-    db.insert(matches)
+    await db.insert(matches)
       .values({
         id: matchId,
         sessionId: liveId,
@@ -395,17 +381,15 @@ async function main() {
         createdAt: new Date(m.startedAt - 30000),
         startedAt: new Date(m.startedAt),
         finishedAt: null,
-      })
-      .run();
-    db.insert(matchPlayers)
+      });
+    await db.insert(matchPlayers)
       .values([
         ...m.teamA.map((userId) => ({ id: newId("mp"), matchId, userId, team: "A" as const })),
         ...m.teamB.map((userId) => ({ id: newId("mp"), matchId, userId, team: "B" as const })),
-      ])
-      .run();
+      ]);
   }
 
-  db.insert(checkIns)
+  await db.insert(checkIns)
     .values(
       liveAttendees.map((p, i) => ({
         id: newId("chk"),
@@ -418,10 +402,9 @@ async function main() {
         lastFinishedAt: lastFinish.has(p.id) ? new Date(lastFinish.get(p.id)!) : null,
         consecutiveGames: Math.min(2, consecutive.get(p.id) ?? 0),
       })),
-    )
-    .run();
+    );
 
-  db.insert(payments)
+  await db.insert(payments)
     .values(
       liveBooked.map((p, i) => ({
         id: newId("pay"),
@@ -433,21 +416,19 @@ async function main() {
         paidAt: i % 7 === 0 ? null : new Date(liveStart + 600000),
         recordedBy: owner.id,
       })),
-    )
-    .run();
+    );
 
-  db.insert(sessionCosts)
+  await db.insert(sessionCosts)
     .values([
       { id: newId("cst"), sessionId: liveId, label: "Court hire", amount: 600 },
       { id: newId("cst"), sessionId: liveId, label: "Shuttles", amount: 150 },
-    ])
-    .run();
+    ]);
 
   /* ------------------------------------------------- upcoming sessions */
 
   const openDate = isoDate(7);
   const openId = newId("ses");
-  db.insert(sessions)
+  await db.insert(sessions)
     .values({
       id: openId,
       groupId,
@@ -470,11 +451,10 @@ async function main() {
       weights: { ...DEFAULT_WEIGHTS, balance: BALANCE_BY_TYPE.balanced },
       createdAt: now,
       closedAt: null,
-    })
-    .run();
+    });
 
   const openBooked = people.slice(1, 19);
-  db.insert(bookings)
+  await db.insert(bookings)
     .values(
       openBooked.map((p, i) => ({
         id: newId("bkg"),
@@ -485,9 +465,8 @@ async function main() {
         bookedAt: new Date(Date.now() - (18 - i) * 3600000),
         cancelledAt: null,
       })),
-    )
-    .run();
-  db.insert(payments)
+    );
+  await db.insert(payments)
     .values(
       openBooked.map((p) => ({
         id: newId("pay"),
@@ -499,13 +478,12 @@ async function main() {
         paidAt: null,
         recordedBy: null,
       })),
-    )
-    .run();
+    );
 
   // A full one, so the waitlist is visible out of the box.
   const fullDate = isoDate(4);
   const fullId = newId("ses");
-  db.insert(sessions)
+  await db.insert(sessions)
     .values({
       id: fullId,
       groupId,
@@ -528,12 +506,11 @@ async function main() {
       weights: { ...DEFAULT_WEIGHTS, balance: BALANCE_BY_TYPE.casual },
       createdAt: now,
       closedAt: null,
-    })
-    .run();
+    });
 
   const fullConfirmed = people.slice(0, 18);
   const waitlisted = people.slice(18, 22);
-  db.insert(bookings)
+  await db.insert(bookings)
     .values([
       ...fullConfirmed.map((p, i) => ({
         id: newId("bkg"),
@@ -553,9 +530,8 @@ async function main() {
         bookedAt: new Date(Date.now() - (4 - i) * 3600000),
         cancelledAt: null,
       })),
-    ])
-    .run();
-  db.insert(payments)
+    ]);
+  await db.insert(payments)
     .values(
       fullConfirmed.map((p) => ({
         id: newId("pay"),
@@ -567,18 +543,14 @@ async function main() {
         paidAt: null,
         recordedBy: null,
       })),
-    )
-    .run();
+    );
 
-  const counts = {
-    players: people.length,
-    sessions: 6,
-    matches: sqlite.prepare("SELECT count(*) as n FROM matches").get() as { n: number },
-  };
-  console.log(
-    `Seeded ${counts.players} players, ${counts.sessions} sessions, ${counts.matches.n} matches.`,
-  );
+  const played = await db.select({ id: matches.id }).from(matches);
+  console.log(`Seeded ${people.length} players, 6 sessions, ${played.length} matches.`);
   console.log("Live session code: TONITE   Staff PIN: 1234");
 }
 
-main();
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

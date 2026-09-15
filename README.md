@@ -6,24 +6,26 @@
 WhatsApp badminton group: fair rotation across multiple courts, QR check-in, payment
 tracking, and a session summary that tells you whether the night was actually fair.
 
-Built to PRD v1.0. Runs locally on a single SQLite file with no cloud setup.
+Built to PRD v1.0. Next.js on Vercel, Postgres on Neon.
 
 ---
 
 ## Run it
 
-Needs Node 22 or newer (tested on 22 and 26).
+Needs Node 22 or newer (tested on 22 and 26) and a Postgres connection string. Neon's free
+tier is the path of least resistance, and a dev branch keeps your work off production data.
 
 ```bash
 npm install
-cp .env.example .env.local     # optional, sensible defaults are built in
-npm run setup                  # creates the database and seeds a demo group
+cp .env.example .env.local     # set DATABASE_URL
+npm run setup                  # push the schema, then seed demo data
 npm run dev                    # http://localhost:3000
                                # port busy? PORT=3210 npm run dev
 ```
 
 `npm run setup` seeds **30 players, 6 sessions and ~160 played games** so every screen
-has something real in it.
+has something real in it. For a real group use `npm run db:bootstrap` instead — see
+`docs/DEPLOYING.md`.
 
 | What | Where |
 | --- | --- |
@@ -161,18 +163,18 @@ src/
   app/        routes
 ```
 
-Next.js 16 App Router, TypeScript strict, Tailwind v4, Drizzle over SQLite. Every
-mutation is a server action posted from a plain `<form>`, so the app keeps working on a
-phone with one bar of signal in a sports hall. Live screens poll every 5-6 seconds;
-swap that for Supabase Realtime when you move off SQLite.
+Next.js 16 App Router, TypeScript strict, Tailwind v4, Drizzle over Neon Postgres (HTTP
+driver, so no connection pool to exhaust from serverless functions). Every mutation is a
+server action posted from a plain `<form>`, so the app keeps working on a phone with one
+bar of signal in a sports hall. Live screens poll every 5-6 seconds.
 
 ---
 
-## Moving to Supabase and Vercel
+## Hosting
 
-`docs/MIGRATE-TO-SUPABASE.md` has the Postgres DDL for every table and the exact list of
-files that change. It is a driver swap plus one migration — the engine, queries and UI
-are untouched.
+`docs/DEPLOYING.md` covers the Vercel and Neon setup, the two environment variables that
+fail quietly when wrong, how to handle schema changes after launch, and what to watch as
+usage grows.
 
 ---
 
@@ -180,9 +182,10 @@ are untouched.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | `./data/smash.db` | SQLite file path |
+| `DATABASE_URL` | none | Neon Postgres connection string, required |
 | `QR_SECRET` | dev fallback | **set this before sharing a real session** |
 | `NEXT_PUBLIC_BASE_URL` | `http://localhost:3000` | used in QR codes and share links |
+| `NEXT_PUBLIC_TIME_ZONE` | `Asia/Dubai` | wall clock times render in; a UTC server shows Gulf check-ins four hours early without it |
 | `PORT` | `3000` | `PORT=3210 npm run dev` when 3000 is taken |
 
 ---
@@ -200,8 +203,9 @@ Known limits, stated plainly:
 - Live screens poll every 5-6 seconds rather than pushing. You notice it if you stare at the
   board; you don't notice it while running a session.
 - Score confirmation by players exists in the data model but is switched off by default.
-- SQLite means one machine. Fine for a laptop at the venue, not for Vercel — see the
-  migration doc.
+- No interactive transactions over the Neon HTTP driver. Every write today is a single
+  statement, so this costs nothing — but check before adding a multi-statement write that
+  must be atomic.
 
 Found something wrong, or want a weight changed? **hello@aiops.ae**
 
