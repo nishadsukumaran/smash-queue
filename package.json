@@ -15,6 +15,7 @@
     "guide": "node scripts/build-guide.mjs",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
+    "db:reset": "tsx src/db/seed.ts",
     "db:bootstrap": "tsx src/db/bootstrap.ts",
     "setup": "npm run db:push && npm run db:seed",
     "test": "tsx src/lib/__tests__/run.ts",

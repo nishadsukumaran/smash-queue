@@ -1,10 +1,20 @@
 node_modules
 .next
 out
-.env*.local
 *.tsbuildinfo
 next-env.d.ts
 *.log
 
+# secrets — never commit
+.env*.local
+.env.shots
+.vercel
+
 # built from docs/USER-GUIDE.md by scripts/build-guide.mjs
 src/generated/
+
+# scratch
+Claude outputs/
+
+# ad-hoc helper scripts run via the desktop bridge
+scripts/_*.sh

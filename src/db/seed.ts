@@ -26,6 +26,14 @@ const ROSTER: Array<[string, number]> = [
   ["Tony Fernandes", 1385], ["Neha Sharma", 1200], ["Bijoy Varghese", 1265],
 ];
 
+/** Session names should match the day they actually land on. */
+function weekday(dateIso: string) {
+  return new Date(`${dateIso}T12:00:00Z`).toLocaleDateString("en-GB", {
+    weekday: "long",
+    timeZone: "UTC",
+  });
+}
+
 function isoDate(offsetDays: number) {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
@@ -143,7 +151,7 @@ async function main() {
         groupId,
         venueId,
         code: `SMSH${String(index + 1).padStart(2, "0")}`,
-        name: "Saturday Badminton",
+        name: `${weekday(date)} Badminton`,
         date,
         startTime: "19:00",
         endTime: "22:00",
@@ -290,7 +298,7 @@ async function main() {
       groupId,
       venueId,
       code: "TONITE",
-      name: "Saturday Badminton",
+      name: `${weekday(liveDate)} Badminton`,
       date: liveDate,
       startTime: "19:00",
       endTime: "22:00",
@@ -434,7 +442,7 @@ async function main() {
       groupId,
       venueId,
       code: "NEXTSA",
-      name: "Saturday Badminton",
+      name: `${weekday(openDate)} Badminton`,
       date: openDate,
       startTime: "19:00",
       endTime: "22:00",
@@ -489,7 +497,7 @@ async function main() {
       groupId,
       venueId: venueId2,
       code: "MIDWK",
-      name: "Wednesday Doubles",
+      name: `${weekday(fullDate)} Doubles`,
       date: fullDate,
       startTime: "20:00",
       endTime: "22:00",
