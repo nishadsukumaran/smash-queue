@@ -293,6 +293,34 @@ export const notifications = pgTable(
 /* ------------------------------------------------------------------- auth */
 
 /**
+ * Sign-in addresses for an account. One row per address, many per user.
+ *
+ * A person is one row in `users` — their Elo, games played, partner history
+ * and fairness record all hang off that single id, and a duplicate quietly
+ * corrupts every one of them. But an organizer reasonably wants to sign in
+ * from a personal address and a work one. So identity is one user, and the
+ * addresses that reach it live here.
+ *
+ * `users.email` stays as the contact address shown in the UI. This table is
+ * the only thing sign-in consults, so there is exactly one place to look when
+ * asking "can this address get in".
+ */
+export const authEmails = pgTable(
+  "auth_emails",
+  {
+    id: id(),
+    userId: text("user_id").notNull().references(() => users.id),
+    /** Lowercased on write. */
+    email: text("email").notNull(),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("auth_email_idx").on(t.email),
+    index("auth_email_user_idx").on(t.userId),
+  ],
+);
+
+/**
  * A magic link that has been emailed but not yet clicked.
  *
  * Only the SHA-256 of the token is stored, so a database leak hands an attacker
@@ -342,3 +370,4 @@ export type CheckIn = typeof checkIns.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type GroupMember = typeof groupMembers.$inferSelect;
 export type AuthSession = typeof authSessions.$inferSelect;
+export type AuthEmail = typeof authEmails.$inferSelect;

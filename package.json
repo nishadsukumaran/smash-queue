@@ -19,6 +19,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:reset": "tsx src/db/seed.ts",
     "db:bootstrap": "tsx src/db/bootstrap.ts",
+    "db:grant-admin": "tsx src/db/grant-admin.ts",
     "setup": "npm run db:migrate && npm run db:seed",
     "test": "tsx src/lib/__tests__/run.ts",
     "sim": "tsx src/lib/__tests__/simulate.ts"

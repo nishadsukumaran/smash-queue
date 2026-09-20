@@ -15,6 +15,13 @@
       "when": 1789921895564,
       "tag": "0001_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789923263213,
+      "tag": "0002_multi_email",
+      "breakpoints": true
     }
   ]
 }

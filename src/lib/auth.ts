@@ -3,7 +3,9 @@ import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { and, eq, gt, isNull, lt, desc } from "drizzle-orm";
 import { db } from "@/db";
-import { authSessions, authTokens, groupMembers, users, type MemberRole } from "@/db/schema";
+import {
+  authEmails, authSessions, authTokens, groupMembers, users, type MemberRole,
+} from "@/db/schema";
 import { newId } from "@/lib/ids";
 
 /**
@@ -55,7 +57,12 @@ export async function requestMagicLink(rawEmail: string): Promise<LinkRequest> {
   const email = normalizeEmail(rawEmail);
   const now = new Date();
 
-  const [user] = await db.select().from(users).where(eq(users.email, email));
+  // auth_emails is the only place sign-in looks, so an organizer with a
+  // personal and a work address reaches one account rather than two.
+  const [identity] = await db.select().from(authEmails).where(eq(authEmails.email, email));
+  if (!identity) return { ok: false, reason: "unknown" };
+
+  const [user] = await db.select().from(users).where(eq(users.id, identity.userId));
   if (!user) return { ok: false, reason: "unknown" };
 
   const staffRoles: MemberRole[] = ["coordinator", "organizer"];
@@ -109,7 +116,9 @@ export async function redeemMagicLink(token: string): Promise<string | null> {
   if (row.consumedAt) return null;
   if (row.expiresAt <= now) return null;
 
-  const [user] = await db.select().from(users).where(eq(users.email, row.email));
+  const [identity] = await db.select().from(authEmails).where(eq(authEmails.email, row.email));
+  if (!identity) return null;
+  const [user] = await db.select().from(users).where(eq(users.id, identity.userId));
   if (!user) return null;
 
   // Consume first. If opening the session then fails, the link is spent rather

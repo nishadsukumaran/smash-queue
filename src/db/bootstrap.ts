@@ -1,7 +1,7 @@
 import "./env";
 import { eq } from "drizzle-orm";
 import { openDb } from "./raw";
-import { groupMembers, groups, users, venues } from "./schema";
+import { authEmails, groupMembers, groups, users, venues } from "./schema";
 import { newId } from "@/lib/ids";
 import { colorFor } from "@/lib/format";
 import { DEFAULT_WEIGHTS, BALANCE_BY_TYPE } from "@/lib/queue-engine";
@@ -56,6 +56,13 @@ async function main() {
     email: ownerEmail,
     avatarColor: colorFor(ownerName),
     rating: 1200,
+    createdAt: now,
+  });
+
+  await db.insert(authEmails).values({
+    id: newId("aem"),
+    userId: ownerId,
+    email: ownerEmail,
     createdAt: now,
   });
 
