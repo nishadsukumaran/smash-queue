@@ -227,5 +227,12 @@ export async function memberActiveAction(fd: FormData) {
 }
 
 export async function addVenueAction(fd: FormData) {
-  await a.addVenue(str(fd, "groupId"), str(fd, "name"), str(fd, "address"), num(fd, "courtCount", 4));
+  await a.addVenue(
+    str(fd, "groupId"),
+    str(fd, "name"),
+    str(fd, "address"),
+    num(fd, "courtCount", 4),
+    str(fd, "latitude") || undefined,
+    str(fd, "longitude") || undefined,
+  );
 }

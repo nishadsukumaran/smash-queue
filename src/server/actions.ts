@@ -12,6 +12,7 @@ import { newId, sessionCode } from "@/lib/ids";
 import { verifyCheckInToken } from "@/lib/qr";
 import { updateRatings } from "@/lib/fairness";
 import { colorFor } from "@/lib/format";
+import { validCoords } from "@/lib/geocode";
 import { grantStaff, revokeStaff, setCurrentUserId, clearCurrentUser } from "@/lib/identity";
 import { DEFAULT_WEIGHTS, BALANCE_BY_TYPE } from "@/lib/queue-engine";
 
@@ -233,13 +234,28 @@ export async function setMemberActive(membershipId: string, active: boolean) {
   return { ok: true };
 }
 
-export async function addVenue(groupId: string, name: string, address: string, courtCount: number) {
+export async function addVenue(
+  groupId: string,
+  name: string,
+  address: string,
+  courtCount: number,
+  latitude?: unknown,
+  longitude?: unknown,
+) {
   if (!name.trim()) return { ok: false, message: "Venue name is required" };
+
+  // Coordinates are optional and validated rather than trusted: the form lets
+  // them be typed by hand, and a half-typed "24." must not be stored as a
+  // location that then renders a pin in the wrong country.
+  const coords = validCoords(latitude, longitude);
+
   await db.insert(venues).values({
     id: newId("ven"),
     groupId,
     name: name.trim(),
     address: address.trim() || null,
+    latitude: coords?.[0] ?? null,
+    longitude: coords?.[1] ?? null,
     courtCount: Math.max(1, courtCount),
   });
   touch();

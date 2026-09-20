@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSessionByCode, getVenue } from "@/server/queries";
 import { isStaffFor } from "@/lib/identity";
 import { money, prettyDate, prettyTime } from "@/lib/format";
+import { directionsUrl, validCoords } from "@/lib/geocode";
 
 export default async function SessionLayout({
   children,
@@ -16,6 +17,7 @@ export default async function SessionLayout({
   if (!session) notFound();
 
   const [venue, staff] = await Promise.all([getVenue(session.venueId), isStaffFor(session.groupId)]);
+  const venueCoords = venue ? validCoords(venue.latitude, venue.longitude) : null;
 
   const tabs = [
     { href: `/s/${session.code}`, label: "Session" },
@@ -55,6 +57,18 @@ export default async function SessionLayout({
           <span className="chip">{money(session.fee, session.currency)}</span>
           <span className="chip">to {session.pointsTo} points</span>
           <span className="chip">{session.gameType}</span>
+          {/* Opens the phone's own maps app. Worth its place next to the fee:
+              "where is it" is the second question after "when is it". */}
+          {venueCoords && (
+            <a
+              href={directionsUrl(venueCoords[0], venueCoords[1])}
+              target="_blank"
+              rel="noreferrer"
+              className="chip chip-teal"
+            >
+              Directions
+            </a>
+          )}
         </div>
         {session.notes && <p className="mt-3 text-xs text-muted">{session.notes}</p>}
       </div>

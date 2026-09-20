@@ -218,3 +218,46 @@ body {
 .prose-court tbody tr:last-child td { border-bottom: 0; }
 
 .prose-court sub { font-size: .8rem; color: var(--color-muted); }
+
+/* ------------------------------------------------------------------- map */
+
+/*
+ * OpenStreetMap ships light tiles and the app is dark, so the tiles are
+ * filtered rather than swapped for a dark-themed provider: one tile source,
+ * one attribution, one set of terms to honour. Applied to the tile layer only
+ * — filtering the whole pane would invert the pin and the attribution too.
+ */
+.venue-map .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9) saturate(0.7);
+}
+
+.venue-map .leaflet-container {
+  background: var(--color-court);
+  font: inherit;
+}
+
+.venue-map .leaflet-control-attribution {
+  background: color-mix(in oklab, var(--color-ink) 78%, transparent);
+  color: var(--color-muted);
+  font-size: 10px;
+}
+.venue-map .leaflet-control-attribution a { color: var(--color-teal); }
+
+.venue-map .leaflet-control-zoom a {
+  background: var(--color-surface);
+  color: var(--color-chalk);
+  border-color: var(--color-line);
+}
+.venue-map .leaflet-control-zoom a:hover { background: var(--color-surface-2); }
+
+/* The pin. A div icon rather than Leaflet's default PNG, which would be a
+   second image request and would not match anything else here. */
+.venue-pin span {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-shuttle);
+  border: 3px solid var(--color-ink);
+  box-shadow: 0 0 0 2px var(--color-shuttle), 0 2px 10px rgb(0 0 0 / 0.5);
+}

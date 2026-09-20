@@ -97,6 +97,13 @@ export const venues = pgTable("venues", {
   groupId: text("group_id").notNull().references(() => groups.id),
   name: text("name").notNull(),
   address: text("address"),
+  /**
+   * Nullable on purpose. A venue is useful with just a name — the address was
+   * free text for months — and an organizer setting one up on a phone should
+   * not be blocked by a map that will not load.
+   */
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
   courtCount: integer("court_count").notNull().default(4),
 });
 
@@ -380,6 +387,7 @@ export type Match = typeof matches.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
 export type CheckIn = typeof checkIns.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
+export type Venue = typeof venues.$inferSelect;
 export type GroupMember = typeof groupMembers.$inferSelect;
 export type AuthSession = typeof authSessions.$inferSelect;
 export type AuthEmail = typeof authEmails.$inferSelect;
