@@ -16,12 +16,18 @@ const FROM = process.env.MAIL_FROM || `${APP_NAME} <onboarding@resend.dev>`;
 
 export type SendResult = { delivered: boolean; fallbackLink?: string };
 
-export async function sendMagicLink(to: string, link: string, name: string): Promise<SendResult> {
+export async function sendMagicLink(
+  to: string,
+  link: string,
+  code: string,
+  name: string,
+): Promise<SendResult> {
   const key = process.env.RESEND_API_KEY;
 
   if (!key) {
     console.warn(
       `\n[mail] RESEND_API_KEY is not set, so no email was sent.\n` +
+        `[mail] Sign-in code for ${to}: ${code}\n` +
         `[mail] Sign-in link for ${to}:\n${link}\n`,
     );
     return { delivered: false, fallbackLink: link };
@@ -34,8 +40,8 @@ export async function sendMagicLink(to: string, link: string, name: string): Pro
       from: FROM,
       to,
       subject: `Sign in to ${APP_NAME}`,
-      text: plain(link, name),
-      html: html(link, name),
+      text: plain(link, code, name),
+      html: html(link, code, name),
     }),
   });
 
@@ -48,31 +54,45 @@ export async function sendMagicLink(to: string, link: string, name: string): Pro
   return { delivered: true };
 }
 
-function plain(link: string, name: string) {
+function plain(link: string, code: string, name: string) {
   return [
     `Hi ${name},`,
     ``,
-    `Here is your sign-in link for ${APP_NAME}:`,
+    `Your ${APP_NAME} sign-in code is:`,
+    ``,
+    `    ${code}`,
+    ``,
+    `Type it on the sign-in screen, or open this link instead:`,
     link,
     ``,
-    `It works once and expires in 15 minutes.`,
-    `If you did not ask for it, you can ignore this — nobody can sign in without the link.`,
+    `Either one works, once, and both expire in 15 minutes.`,
+    `If you did not ask for this, ignore it — the code is useless without your email address.`,
     ``,
     `Questions: ${SUPPORT_EMAIL}`,
   ].join("\n");
 }
 
-function html(link: string, name: string) {
+function html(link: string, code: string, name: string) {
   // Deliberately plain: inline styles only, no external CSS or images, so it
-  // renders the same in Gmail, Outlook and a phone's default client.
+  // renders the same in Gmail, Outlook and a phone's default client. The code
+  // leads because most people open this on the phone they are signing in on,
+  // where switching back to the browser beats following a link into whatever
+  // in-app browser the mail client decides to use.
   return `<!doctype html><html><body style="margin:0;padding:24px;background:#f4f6f5;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0F241D">
   <div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px">
     <p style="margin:0 0 8px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#5c7a6f">${APP_NAME}</p>
-    <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3">Hi ${escapeHtml(name)}, here's your sign-in link</h1>
-    <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#3c554c">It works once and expires in 15 minutes.</p>
+    <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3">Hi ${escapeHtml(name)}, here's your sign-in code</h1>
+
+    <div style="background:#0F241D;border-radius:12px;padding:20px;text-align:center">
+      <p style="margin:0 0 6px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#7FA396">Enter this code</p>
+      <p style="margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:38px;font-weight:700;letter-spacing:.22em;color:#D7F75B">${escapeHtml(code)}</p>
+    </div>
+
+    <p style="margin:24px 0 12px;font-size:15px;line-height:1.6;color:#3c554c">Or just tap the button — either one works.</p>
     <a href="${link}" style="display:inline-block;background:#0F241D;color:#D7F75B;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:999px">Sign in</a>
-    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#6b8378">Or paste this into your browser:<br><span style="word-break:break-all;color:#3c554c">${link}</span></p>
-    <p style="margin:24px 0 0;padding-top:20px;border-top:1px solid #e3e9e6;font-size:13px;line-height:1.6;color:#6b8378">Didn't ask for this? Ignore it — nobody can sign in without the link. Questions: <a href="mailto:${SUPPORT_EMAIL}" style="color:#1f7a5c">${SUPPORT_EMAIL}</a></p>
+
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#6b8378">Both expire in 15 minutes and work once. Link not clickable? Paste this:<br><span style="word-break:break-all;color:#3c554c">${link}</span></p>
+    <p style="margin:24px 0 0;padding-top:20px;border-top:1px solid #e3e9e6;font-size:13px;line-height:1.6;color:#6b8378">Didn't ask for this? Ignore it — the code is useless without your email address. Questions: <a href="mailto:${SUPPORT_EMAIL}" style="color:#1f7a5c">${SUPPORT_EMAIL}</a></p>
   </div>
 </body></html>`;
 }

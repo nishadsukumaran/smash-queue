@@ -333,7 +333,19 @@ export const authTokens = pgTable(
   {
     id: id(),
     email: text("email").notNull(),
+    /** The long random token behind the clickable link. */
     tokenHash: text("token_hash").notNull(),
+    /**
+     * The six digits printed in the same email. One row, two ways in, so
+     * whichever gets used burns the other — there is never a spare credential
+     * left alive in an inbox.
+     */
+    codeHash: text("code_hash"),
+    /**
+     * Wrong guesses against the code. Six digits is a million combinations,
+     * which is only safe while the number of tries is small and finite.
+     */
+    attempts: integer("attempts").notNull().default(0),
     expiresAt: ts("expires_at").notNull(),
     consumedAt: ts("consumed_at"),
     createdAt: ts("created_at").notNull(),

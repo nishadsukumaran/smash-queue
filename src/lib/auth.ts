@@ -1,7 +1,7 @@
 import "server-only";
-import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomInt, createHash, timingSafeEqual } from "node:crypto";
 import { cookies, headers } from "next/headers";
-import { and, eq, gt, isNull, lt, desc } from "drizzle-orm";
+import { and, eq, gt, gte, isNull, lt, desc, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   authEmails, authSessions, authTokens, groupMembers, users, type MemberRole,
@@ -23,6 +23,15 @@ import { newId } from "@/lib/ids";
 
 const SESSION_COOKIE = "bq_session";
 const LINK_TTL_MS = 15 * 60 * 1000;
+/** Wrong code guesses before the token is destroyed rather than left to grind. */
+const MAX_CODE_ATTEMPTS = 5;
+/**
+ * Requests per address per hour. Without it, six digits could be ground down
+ * by asking for a fresh code every time the attempt counter runs out. With it,
+ * an attacker gets at most MAX_REQUESTS_PER_HOUR x MAX_CODE_ATTEMPTS guesses an
+ * hour against a million combinations — and every attempt emails the victim.
+ */
+const MAX_REQUESTS_PER_HOUR = 5;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** No more than this many unconsumed links per email at once. */
 const MAX_LIVE_LINKS = 3;
@@ -31,6 +40,12 @@ export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 const mint = () => randomBytes(32).toString("base64url");
+
+/**
+ * Six digits, uniformly distributed. randomInt is rejection-sampled by Node,
+ * so unlike `randomBytes % 1000000` the low values are not slightly likelier.
+ */
+const mintCode = () => String(randomInt(0, 1_000_000)).padStart(6, "0");
 
 /** Constant-time compare so a wrong token cannot be narrowed by timing. */
 function sameHash(a: string, b: string) {
@@ -42,7 +57,7 @@ function sameHash(a: string, b: string) {
 /* ------------------------------------------------------------ requesting */
 
 export type LinkRequest =
-  | { ok: true; token: string; user: { id: string; name: string; email: string } }
+  | { ok: true; token: string; code: string; user: { id: string; name: string; email: string } }
   | { ok: false; reason: "unknown" | "rate-limited" };
 
 /**
@@ -86,17 +101,29 @@ export async function requestMagicLink(rawEmail: string): Promise<LinkRequest> {
     );
   if (live.length >= MAX_LIVE_LINKS) return { ok: false, reason: "rate-limited" };
 
+  // Counts spent tokens too, so burning attempts and asking again does not
+  // reset the budget.
+  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  const recent = await db
+    .select()
+    .from(authTokens)
+    .where(and(eq(authTokens.email, email), gte(authTokens.createdAt, hourAgo)));
+  if (recent.length >= MAX_REQUESTS_PER_HOUR) return { ok: false, reason: "rate-limited" };
+
   const token = mint();
+  const code = mintCode();
   await db.insert(authTokens).values({
     id: newId("atk"),
     email,
     tokenHash: hash(token),
+    codeHash: hash(code),
+    attempts: 0,
     expiresAt: new Date(now.getTime() + LINK_TTL_MS),
     consumedAt: null,
     createdAt: now,
   });
 
-  return { ok: true, token, user: { id: user.id, name: user.name, email } };
+  return { ok: true, token, code, user: { id: user.id, name: user.name, email } };
 }
 
 /* -------------------------------------------------------------- redeeming */
@@ -116,15 +143,29 @@ export async function redeemMagicLink(token: string): Promise<string | null> {
   if (row.consumedAt) return null;
   if (row.expiresAt <= now) return null;
 
+  // Checked before consuming, so a token whose account has since been removed
+  // is not burned for nothing.
   const [identity] = await db.select().from(authEmails).where(eq(authEmails.email, row.email));
   if (!identity) return null;
-  const [user] = await db.select().from(users).where(eq(users.id, identity.userId));
-  if (!user) return null;
 
   // Consume first. If opening the session then fails, the link is spent rather
   // than left live for a replay.
   await db.update(authTokens).set({ consumedAt: now }).where(eq(authTokens.id, row.id));
 
+  return openSession(row.email);
+}
+
+/**
+ * Turns a proven address into a signed-in browser. Shared by the link and the
+ * code so the two doors cannot drift apart in what they grant.
+ */
+async function openSession(email: string): Promise<string | null> {
+  const [identity] = await db.select().from(authEmails).where(eq(authEmails.email, email));
+  if (!identity) return null;
+  const [user] = await db.select().from(users).where(eq(users.id, identity.userId));
+  if (!user) return null;
+
+  const now = new Date();
   const sessionToken = mint();
   const h = await headers();
   await db.insert(authSessions).values({
@@ -147,6 +188,59 @@ export async function redeemMagicLink(token: string): Promise<string | null> {
   });
 
   return user.id;
+}
+
+/**
+ * Redeems the six-digit code instead of the link.
+ *
+ * Scoped to the address that asked for it, so an attacker must already know
+ * whose account they are attacking, and then still beat a million-to-one guess
+ * within fifteen minutes and five tries. A wrong guess costs one of those
+ * tries; the fifth destroys the token outright rather than leaving it to be
+ * ground down. Requests per address are capped hourly too, so the obvious
+ * workaround — burn five, ask for a fresh one — runs out as well.
+ */
+export async function redeemCode(rawEmail: string, rawCode: string): Promise<string | null> {
+  const email = normalizeEmail(rawEmail);
+  const code = rawCode.replace(/\D/g, "");
+  if (code.length !== 6) return null;
+
+  const now = new Date();
+  const candidates = await db
+    .select()
+    .from(authTokens)
+    .where(
+      and(
+        eq(authTokens.email, email),
+        isNull(authTokens.consumedAt),
+        gt(authTokens.expiresAt, now),
+      ),
+    )
+    .orderBy(desc(authTokens.createdAt));
+
+  const codeHash = hash(code);
+
+  for (const row of candidates) {
+    if (row.attempts >= MAX_CODE_ATTEMPTS) continue;
+    if (!row.codeHash) continue;
+
+    if (sameHash(row.codeHash, codeHash)) {
+      await db.update(authTokens).set({ consumedAt: now }).where(eq(authTokens.id, row.id));
+      return openSession(email);
+    }
+
+    const attempts = row.attempts + 1;
+    await db
+      .update(authTokens)
+      .set({
+        attempts,
+        // Out of tries: kill it rather than let it be worn down.
+        consumedAt: attempts >= MAX_CODE_ATTEMPTS ? now : null,
+      })
+      .where(eq(authTokens.id, row.id));
+  }
+
+  return null;
 }
 
 /* ---------------------------------------------------------------- reading */
