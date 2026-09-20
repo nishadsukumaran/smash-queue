@@ -76,6 +76,11 @@ async function main() {
 
   const owner = people[0];
 
+  // The demo organizer needs an email, or nothing can sign in to /admin.
+  // Overridable so a real clone can point it at a real inbox.
+  const ownerEmail = (process.env.OWNER_EMAIL || "organizer@example.com").toLowerCase();
+  await db.update(users).set({ email: ownerEmail }).where(eq(users.id, owner.id));
+
   const groupId = newId("grp");
   await db.insert(groups)
     .values({

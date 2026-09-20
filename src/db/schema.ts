@@ -15,18 +15,25 @@ const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" 
 
 /* ------------------------------------------------------------------ users */
 
-export const users = pgTable("users", {
-  id: id(),
-  name: text("name").notNull(),
-  phone: text("phone"),
-  email: text("email"),
-  avatarColor: text("avatar_color").notNull().default("#3DD9A4"),
-  /** Doubles Elo. 1200 = a brand new player with no history. */
-  rating: doublePrecision("rating").notNull().default(1200),
-  ratingGames: integer("rating_games").notNull().default(0),
-  active: boolean("active").notNull().default(true),
-  createdAt: ts("created_at").notNull(),
-});
+export const users = pgTable(
+  "users",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    phone: text("phone"),
+    /** Lowercased on write. Nullable: most players never give one. */
+    email: text("email"),
+    avatarColor: text("avatar_color").notNull().default("#3DD9A4"),
+    /** Doubles Elo. 1200 = a brand new player with no history. */
+    rating: doublePrecision("rating").notNull().default(1200),
+    ratingGames: integer("rating_games").notNull().default(0),
+    active: boolean("active").notNull().default(true),
+    createdAt: ts("created_at").notNull(),
+  },
+  // Postgres allows many NULLs under a unique index, so players without an
+  // email are unaffected. It is sign-in identity, so it has to resolve to one row.
+  (t) => [uniqueIndex("users_email_idx").on(t.email)],
+);
 
 /* ----------------------------------------------------------------- groups */
 
@@ -283,9 +290,55 @@ export const notifications = pgTable(
   (t) => [index("notif_user_idx").on(t.userId)],
 );
 
+/* ------------------------------------------------------------------- auth */
+
+/**
+ * A magic link that has been emailed but not yet clicked.
+ *
+ * Only the SHA-256 of the token is stored, so a database leak hands an attacker
+ * nothing usable: they would have to invert the hash to forge a link. Same
+ * reasoning as never storing a password. Single-use and short-lived, because a
+ * magic link sitting in an inbox is a bearer credential.
+ */
+export const authTokens = pgTable(
+  "auth_tokens",
+  {
+    id: id(),
+    email: text("email").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: ts("expires_at").notNull(),
+    consumedAt: ts("consumed_at"),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("auth_token_hash_idx").on(t.tokenHash),
+    index("auth_token_email_idx").on(t.email),
+  ],
+);
+
+/** A signed-in browser. Hashed for the same reason as the token above. */
+export const authSessions = pgTable(
+  "auth_sessions",
+  {
+    id: id(),
+    userId: text("user_id").notNull().references(() => users.id),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: ts("expires_at").notNull(),
+    lastSeenAt: ts("last_seen_at").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("auth_session_hash_idx").on(t.tokenHash),
+    index("auth_session_user_idx").on(t.userId),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Match = typeof matches.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
 export type CheckIn = typeof checkIns.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
+export type GroupMember = typeof groupMembers.$inferSelect;
+export type AuthSession = typeof authSessions.$inferSelect;

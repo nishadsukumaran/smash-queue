@@ -28,9 +28,17 @@ async function main() {
   const fee = Number(process.env.DEFAULT_FEE ?? 40);
   const courts = Number(process.env.COURT_COUNT ?? 4);
   const pin = (process.env.STAFF_PIN ?? "").trim();
+  const ownerEmail = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
 
   if (!/^\d{4,8}$/.test(pin)) {
     console.error("STAFF_PIN must be 4 to 8 digits. Refusing to bootstrap with a guessable PIN.");
+    process.exit(1);
+  }
+
+  // Without this the group exists but nobody can reach /admin: the organizer
+  // screens need an account, and an account is an email.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(ownerEmail)) {
+    console.error("OWNER_EMAIL must be a real address — it is how the organizer signs in.");
     process.exit(1);
   }
 
@@ -45,6 +53,7 @@ async function main() {
   await db.insert(users).values({
     id: ownerId,
     name: ownerName,
+    email: ownerEmail,
     avatarColor: colorFor(ownerName),
     rating: 1200,
     createdAt: now,
