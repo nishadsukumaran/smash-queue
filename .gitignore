@@ -17,4 +17,4 @@ src/generated/
 Claude outputs/
 
 # ad-hoc helper scripts run via the desktop bridge
-scripts/_*.sh
+scripts/_*
