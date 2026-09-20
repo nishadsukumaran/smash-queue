@@ -54,7 +54,7 @@ line explaining why. Start. Finish. Next.
 
 ### 💰 For organizers
 Sessions, members, venues, fees. Expected vs collected vs outstanding, minus court hire and
-shuttles, settled before everyone leaves.
+shuttles, settled before everyone leaves. Behind an account, not a PIN.
 
 </td>
 </tr>
@@ -189,7 +189,12 @@ npm run dev                    # http://localhost:3000
 ```
 
 `npm run setup` seeds **30 players, 6 sessions and ~160 played games**, so every screen has
-something real in it. Start at `/who` and tap a name — there is no signup.
+something real in it. Start at `/who` and tap a name — players never sign up or sign in.
+
+For the organizer screens, go to `/signin` as `organizer@example.com`. Without a
+`RESEND_API_KEY` the development build prints the code and link straight onto the page, so
+a fresh clone gets in before any mail provider exists. The production build refuses to
+pretend it sent something.
 
 ### Where to look first
 
@@ -201,16 +206,21 @@ something real in it. Start at `/who` and tap a name — there is no signup.
 | ⏳ Full session | `/s/MIDWK` | Waitlist with automatic promotion |
 | ⚙️ Organizer | `/admin` | Sessions, members, venues, money |
 | 📖 User guide | `/guide` | The non-technical guide, in-app |
+| 🔐 Staff sign-in | `/signin` | Emails a code and a link |
 | 🔑 **Staff PIN** | — | **`1234`** (demo seed only) |
+| ✉️ **Demo organizer** | — | **`organizer@example.com`** — with no mail provider set, dev prints the code on screen |
 
 ### Commands
 
 | Command | What it does |
 | :--- | :--- |
 | `npm run dev` | Dev server, rebuilds the in-app guide first |
-| `npm run setup` | `db:push` + `db:seed` — schema then demo data |
+| `npm run setup` | `db:migrate` + `db:seed` — schema then demo data |
+| `npm run db:migrate` | Apply pending migrations. Baselines a database built by the old `db:push` |
+| `npm run db:generate` | Diff the schema into a new migration — review the SQL before running it |
 | `npm run db:reset` | Wipe and reseed when the demo gets messy |
 | `npm run db:bootstrap` | **Real** group: one group, one venue, one organizer, no demo data |
+| `npm run db:grant-admin` | Give a player staff rights, or a second sign-in address |
 | `npm test` | 38 unit tests |
 | `npm run sim` | Five session shapes × five runs, reports fairness |
 
@@ -288,7 +298,8 @@ Everything in PRD §31 (MVP scope):
 
 | Area | Shipped |
 | :--- | :--- |
-| **Identity** | Player profiles, group membership, no passwords, cookie identity per phone |
+| **Identity** | Players: cookie per phone, no signup, no password. Staff: magic-link accounts, several sign-in addresses per person |
+| **Access** | Session PIN for the court board, accounts only for anything spanning sessions |
 | **Self sign-up** | From the session link, with a duplicate-name guard and an organizer kill switch |
 | **Sessions** | Shareable code, courts, capacity, fee, notes, game type, per-session weights |
 | **Booking** | Book, cancel, capacity limit, waitlist with automatic promotion and renumbering |
@@ -300,6 +311,7 @@ Everything in PRD §31 (MVP scope):
 | **Close-out** | No-show marking, session summary, **fairness score** |
 | **Stats** | Player history, personal stats, doubles Elo leaderboard |
 | **Audit** | Silent coordinator override log |
+| **Schema** | Committed migrations, with baselining for databases built before them |
 | **Delivery** | Installable PWA, no external CDN or font dependencies |
 
 > **Deliberately Phase 2:** push / WhatsApp notifications, online payments, tournament mode,
@@ -307,24 +319,67 @@ Everything in PRD §31 (MVP scope):
 
 ---
 
+## Who can see what
+
+Players never sign in. They tap their name once and the phone remembers — no account, no
+password, nothing to lose at the door. Accounts exist only for the people who can see other
+people's money and history.
+
+For those, one email carries **two ways in**: a six-digit code and a clickable link, on the
+same token, so using either burns the other. The code is there because a magic link quietly
+assumes the browser opening the email is the browser signing in. On a phone it usually
+is not — the mail client hands the link to its own in-app browser, the session lands there,
+and the tab the person started in is still signed out. A code goes wherever they already
+are, and unlike a link it cannot be spent by a mail scanner prefetching it.
+
+Six digits is a million combinations, which is only safe while the number of tries is small
+and finite:
+
+| Control | Why it's there |
+| :--- | :--- |
+| Five wrong guesses destroys the token | Not locks — destroys, so it cannot be ground down |
+| Five requests per address per hour | Otherwise you burn five guesses and ask for a fresh code, forever |
+| Spent tokens count toward that cap | Failing does not refill the budget |
+| Code scoped to the address that asked | An attacker must know whose account they are attacking first |
+| Only SHA-256 hashes stored | A dump of the auth tables is inert, links and sessions alike |
+| Redirects restricted to same-site paths | Otherwise a link starting on our own domain could bounce a freshly signed-in organizer somewhere else |
+
+The sign-in form answers **identically** whether or not an address belongs to anyone,
+including when mail is unconfigured — that check runs before the lookup, so it cannot single
+out real members either. Say "no such account" and the form becomes a way to test who plays
+here.
+
+One person, several addresses: sign-in resolves through `auth_emails`, so a personal and a
+work address reach the same account. The alternative — a second user row — is the one
+mistake that quietly breaks games played, fairness, Elo and partner history at once, which
+is the same failure the duplicate-name guard exists to stop.
+
+---
+
 ## Architecture
 
 ```
 src/
-├── db/            schema.ts (15 tables, Drizzle) · seed.ts · bootstrap.ts
+├── db/            schema.ts (18 tables, Drizzle) · migrate.ts · seed.ts
+│                  bootstrap.ts · grant-admin.ts
 ├── lib/
 │   ├── queue-engine.ts   the matchmaking engine — pure, no I/O
 │   ├── fairness.ts       fairness score + doubles Elo with margin multiplier
 │   ├── sim.ts            in-memory session simulator
 │   ├── qr.ts             HMAC-signed check-in tokens
+│   ├── auth.ts           magic links, one-time codes, sessions
+│   ├── mail.ts           the one outbound email
 │   ├── identity.ts       cookie identity + staff PIN
+│   ├── safe-next.ts      redirect allow-list
 │   └── origin.ts         request-derived base URL, so QR follows the domain
 ├── server/
 │   ├── queries.ts        read models
 │   ├── actions.ts        typed server actions
-│   └── form-actions.ts   FormData wrappers — every form works without JS
+│   ├── form-actions.ts   FormData wrappers — every form works without JS
+│   └── auth-actions.ts   sign in, sign out — kept apart to stay auditable
 ├── components/    shared UI
-└── app/           17 routes
+├── drizzle/       committed migrations
+└── app/           19 routes
 ```
 
 | Layer | Choice | Why |
@@ -334,6 +389,7 @@ src/
 | Styling | **Tailwind v4** CSS-first `@theme` | No config file, no runtime, no CDN |
 | Data | **Drizzle ORM** → **Neon Postgres** | HTTP driver — no connection pool to exhaust from serverless |
 | Hosting | **Vercel**, region `fra1` | Co-located with the Neon Frankfurt primary |
+| Auth | **Magic link + 6-digit code**, Resend | No passwords to store, leak or reset. The code exists because mail apps open links in their own browser |
 | Realtime | Polling, 5–6 s | Honest about what it is; push is Phase 2 |
 
 Every mutation is a server action posted from a plain `<form>`, so the app keeps working on a
@@ -347,6 +403,9 @@ phone with one bar of signal in a sports hall.
 | :--- | :--- | :--- |
 | `DATABASE_URL` | — | Neon Postgres connection string. **Required** |
 | `QR_SECRET` | dev fallback | ⚠️ **Set this before sharing a real session** |
+| `RESEND_API_KEY` | none | Sends sign-in codes. Without it, dev prints them; production says so rather than pretending |
+| `MAIL_FROM` | Resend sandbox | `Smash Queue <noreply@yourdomain>`, on a domain Resend has verified |
+| `OWNER_EMAIL` | — | `db:bootstrap` only. How the first organizer signs in, so it is required there |
 | `APP_BASE_URL` | derived from request | Optional. QR codes normally follow the domain they're served from |
 | `NEXT_PUBLIC_TIME_ZONE` | `Asia/Dubai` | Wall-clock times. A UTC server shows Gulf check-ins four hours early without it |
 | `PORT` | `3000` | `PORT=3210 npm run dev` when 3000 is taken |
@@ -369,10 +428,17 @@ them are worth knowing before you deploy this for someone else.
 
 | Known limit | Impact | Plan |
 | :--- | :--- | :--- |
-| Staff PIN is the only access control | Fine for one trusted group, not for anything public | Proper logins are the next thing on the list |
+| Session PIN still opens the court board | A leaked PIN gets a stranger into tonight's board, check-in and payments. It reaches nothing that spans sessions | Kept on purpose — see below |
+| One group per deployment | `getGroup()` takes the first row; `db:bootstrap` refuses a second | Multi-group is next |
 | Live screens poll every 5–6 s | Noticeable if you stare at the board, not while running a session | Push in Phase 2 |
 | Player score confirmation off by default | In the data model, switched off | Enable per group |
 | No interactive transactions over Neon HTTP | Costs nothing today — every write is a single statement | Check before adding a multi-statement atomic write |
+
+**On keeping the PIN.** It would be tidier to delete it, and worse. The realistic
+alternative at 7pm in a sports hall on one bar of signal is telling a coordinator to go and
+find their email, and a coordinator who cannot start a game runs the night on paper. So the
+PIN survives where speed decides the outcome, and reaches nothing else: members, venues,
+fees, settings and statistics take an account and ignore it entirely.
 
 Found something wrong, or want a weight changed? **hello@aiops.ae**
 

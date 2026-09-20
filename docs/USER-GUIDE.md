@@ -129,7 +129,20 @@ your most frequent partner and opponent, and your rating.
 
 ## 3. For the coordinator
 
-Everything here sits behind the group PIN. Enter it once per phone.
+### Getting in
+
+Two ways, and the fast one is deliberate.
+
+**The session PIN.** Ask the organizer, type it once, and that phone stays unlocked. This
+covers the court board, check-in, payments and the QR code — everything you need with a
+game waiting. It is one short number because the alternative, mid-session on bad venue
+wifi, is you running the night on paper.
+
+**Or an account.** Tap *Sign in with email* instead and you get a six-digit code and a
+link. Either signs you in; both expire in fifteen minutes and work once. Worth doing if
+you help out regularly, because it survives a PIN change.
+
+Whichever you use, the screens are the same.
 
 ### Before the first game
 
@@ -232,8 +245,24 @@ them by hand.
 Names usually come straight out of the WhatsApp group. Add them under **Members**. Rating
 is optional — leave it at 1200 and it settles itself once scores start going in.
 
-Roles: **Player**, **Coordinator**, **Organizer**. Anyone with the PIN can run a session;
-roles are for your own record keeping until proper logins arrive.
+Roles: **Player**, **Coordinator**, **Organizer**, and they now decide real things.
+
+| Role | Can reach |
+| --- | --- |
+| Player | Their own screens. No account, no password, nothing to forget. |
+| Coordinator | Court board, check-in, payments, QR — with an account or the PIN |
+| Organizer | All of the above, plus members, venues, fees, settings and statistics |
+
+Anyone with the PIN can still run tonight's session. Nobody reaches the organizer screens
+without an account, whatever the PIN is.
+
+### Giving somebody an account
+
+Add them as a member with their email, set the role, and they can sign themselves in — no
+password to set, invent or reset. To give one person two addresses, a personal and a work
+one, add both to the same member rather than creating a second entry. Two records for one
+human quietly breaks games played, fairness, the leaderboard and partner history all at
+once, and nothing warns you it has happened.
 
 ### Venues
 
@@ -251,9 +280,13 @@ who plays with whom most often.
 **Organizer → Members → Group**. Type a new 4 to 8 digit PIN and save. Nobody gets signed
 out: a coordinator who already unlocked their phone stays unlocked until they tap **Lock**.
 
-Change it when a coordinator stops helping out, and change it from the one you were given
-at setup before you hand it to anybody else. The PIN is currently the only thing between a
-curious player and the payments screen.
+Change it when a coordinator stops helping out, and change it from whatever you were given
+at setup. Assume it leaks eventually — it gets read out at venues and pasted into group
+chats — and treat it as tonight's door code rather than a password.
+
+What it costs you if it does leak is bounded now: the PIN reaches the court board,
+check-in and payments for a session, and nothing that spans sessions. Your member list,
+fees, venues and the leaderboard need an account.
 
 ---
 
@@ -357,6 +390,24 @@ sees it, so the people at the top are the ones owed a game.
 **Two people keep getting drawn together.** Add a *Different games* preference for them on
 the board. It lasts for tonight only.
 
+**The sign-in email hasn't arrived.** Check spam first. If it still isn't there, the
+address may not be on the staff list — the form says "a code is on its way" to any address
+typed into it, deliberately, so that it cannot be used to work out who plays here. Ask the
+organizer to confirm the address on your member record.
+
+**The code says it didn't work.** They expire in fifteen minutes and work once, so an
+older email in the thread will fail — use the newest. Five wrong tries kills that code for
+good; request a fresh one. And if you already tapped the link in that same email, the code
+from it is spent, because both are the same key.
+
+**You tapped the link and it signed you in, but the tab you were using is still asking.**
+Mail apps often open links in their own built-in browser, which is not the browser you
+started in. Use the six-digit code instead — you type it where you already are.
+
+**You're locked out of the organizer screens entirely.** The PIN will not get you in there
+by design. Somebody who still has organizer access can add or correct your email under
+**Members**. If nobody does, that is a job for whoever runs the deployment.
+
 ---
 
 ## Quick reference
@@ -373,6 +424,9 @@ the board. It lasts for tonight only.
 | Add a walk-in | Check-in tab → Walk-in |
 | Close the night | Court board → Close session |
 | See the fairness score | Summary tab |
+| Unlock the court board | Session PIN, or sign in with email |
+| Sign in as staff | Session link → Sign in with email |
+| Change the session PIN | Organizer → Members → Group |
 | Create a session | Organizer → New session |
 | Add a member | Organizer → Members |
 | See the leaderboard | Organizer → Statistics |

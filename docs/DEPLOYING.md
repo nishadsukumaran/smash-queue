@@ -28,18 +28,24 @@ forty. `vercel.json` pins functions to `fra1` because the Neon project lives in
 
 ### 1. Neon
 
-Create a project (Frankfurt is a good pick for the Gulf), then push the schema:
+Create a project (Frankfurt is a good pick for the Gulf), then apply the migrations:
 
 ```bash
 export DATABASE_URL="postgresql://...neon.tech/neondb?sslmode=require"
-npm run db:push
+npm run db:migrate
 ```
+
+`db:migrate` is safe to run against a database at any stage. An empty one gets every
+migration in order. A database created by an older `db:push` gets baselined — the ledger is
+written as though the first migration had run, because the tables it would create are
+already there — and everything after it applies normally. Running it twice does nothing.
 
 ### 2. Create the group
 
 ```bash
 GROUP_NAME="Abu Dhabi Smashers" \
 OWNER_NAME="Your Name" \
+OWNER_EMAIL="you@example.com" \
 VENUE_NAME="Zayed Sports City, Hall 2" \
 GROUP_LOCATION="Abu Dhabi, UAE" \
 DEFAULT_FEE=40 COURT_COUNT=4 \
@@ -47,8 +53,39 @@ STAFF_PIN=<4 to 8 digits> \
 npm run db:bootstrap
 ```
 
+Every input, with its default:
+
+| Variable | Default | |
+| --- | --- | --- |
+| `OWNER_EMAIL` | — | **Required.** How the first organizer signs in |
+| `STAFF_PIN` | — | **Required.** 4 to 8 digits; it refuses anything shorter |
+| `GROUP_NAME` | `Badminton Group` | |
+| `OWNER_NAME` | `Organizer` | Also becomes your player record |
+| `VENUE_NAME` | `Main Hall` | |
+| `VENUE_ADDRESS` | none | Free text, shown on the session page |
+| `GROUP_LOCATION` | `Abu Dhabi, UAE` | |
+| `CURRENCY` | `AED` | Display only — no conversion anywhere |
+| `DEFAULT_FEE` | `40` | Per player per session, overridable per session |
+| `COURT_COUNT` | `4` | The venue's courts, overridable per session |
+| `POINTS_TO` | `30` | Points a game is played to |
+
 This creates the group, its first venue and you as organizer. Nothing else — no demo players,
 no fake match history. It refuses to run twice.
+
+`OWNER_EMAIL` is required and is how you sign in. Without it the group exists but nobody can
+reach `/admin`, because the organizer screens take an account and an account is an email.
+
+To add a second sign-in address later, or to give an existing player staff rights:
+
+```bash
+npm run db:grant-admin -- "Their Name" them@example.com            # organizer
+npm run db:grant-admin -- "Their Name" them@example.com coordinator
+```
+
+Run it twice with two addresses to give **one person** two ways in — a personal address and
+a work one, say. It attaches them to the existing player rather than creating a second
+record, which matters more than it sounds: games played, fairness, Elo and partner history
+all hang off one user id, and nothing warns you when one person quietly becomes two.
 
 `npm run db:seed` is the opposite: thirty invented players and a hundred and fifty fake
 matches, for local development. **Never point it at production.**
@@ -61,8 +98,23 @@ Import the GitHub repo and set these environment variables:
 | --- | --- |
 | `DATABASE_URL` | Neon pooled connection string |
 | `QR_SECRET` | `openssl rand -base64 32` |
+| `RESEND_API_KEY` | From resend.com — see below |
+| `MAIL_FROM` | `Smash Queue <noreply@yourdomain>` |
 | `APP_BASE_URL` | *leave unset* — see below |
 | `NEXT_PUBLIC_TIME_ZONE` | `Asia/Dubai` |
+
+**`RESEND_API_KEY` is what makes sign-in work.** Staff and organizers sign in with a code
+and a link sent by email; without a mail provider neither can be sent. Create a Resend
+account, add your domain, put the DKIM and SPF records it gives you into DNS, and wait for
+it to verify. Then set `MAIL_FROM` to an address at that domain.
+
+Until the key is set, the sign-in form says so plainly rather than claiming to have sent
+something. Coordinators can still use the session PIN on the court board, but nobody can
+reach the organizer screens — so set this before you need it.
+
+> **Adding DNS records can knock out other records in the same zone.** If your app is on a
+> subdomain of the domain you are verifying, check that its record still resolves after the
+> mail setup, not just that mail works.
 
 **`APP_BASE_URL` should normally be left unset.** QR codes are built from the origin
 the request actually arrived on, so they are correct on production, on every preview
@@ -80,21 +132,37 @@ number plausible enough that nobody questions it.
 
 ## Schema changes after launch
 
-`npm run db:push` compares the schema to the database and applies the difference. It is fine
-for additive changes. Before anything that drops or renames a column, take a Neon branch
-first — that's a point-in-time copy you can restore from, and it costs nothing:
+Edit `src/db/schema.ts`, then:
+
+```bash
+npm run db:generate        # writes SQL to ./drizzle, review it
+npm run db:migrate         # applies anything pending
+```
+
+**Read the generated SQL before running it.** Drizzle infers intent from a diff, and a
+renamed column looks identical to a dropped one plus an added one. If the migration drops
+something you wanted to keep, edit the file — it is ordinary SQL, and a data-moving
+statement can be appended by hand. `0002_multi_email.sql` does exactly that: it creates a
+table and then backfills it from the old column in the same migration, so a fresh clone and
+a live database end up in the same state.
+
+Migrations are committed, so the repo is the record of what production has had done to it.
+`db:push` is still in package.json for throwaway local iteration. Do not point it at
+production: it applies a diff with no ledger and no review, which is how a column
+disappears without anyone deciding it should.
+
+Before anything destructive, take a Neon branch first — a point-in-time copy you can
+restore from, and it costs nothing:
 
 ```bash
 # in the Neon console, or via the API
 # branch: "before-<change>"
 ```
 
-For a change that needs care, generate a migration instead of pushing:
-
-```bash
-npx drizzle-kit generate   # writes SQL to ./drizzle
-npx drizzle-kit migrate    # applies it
-```
+Run `db:migrate` against production **before** the code that needs the new columns ships.
+Additive migrations are safe to apply ahead of a deploy — the running app simply ignores
+what it does not know about — whereas deploying first leaves the app querying tables that
+do not exist yet.
 
 ---
 
@@ -103,6 +171,31 @@ npx drizzle-kit migrate    # applies it
 Vercel builds every branch. Give previews their own Neon branch rather than pointing them at
 production data — the Neon Vercel integration can create one per preview automatically, which
 also means a preview can run destructive migrations without any risk to a live session.
+
+---
+
+## Access, and what it protects
+
+Two gates, defending different things.
+
+| Screen | Needs | Why |
+| --- | --- | --- |
+| Court board, check-in, payments, QR | Session PIN **or** an account | A coordinator mid-session cannot be told to go and find their email. On one bar of signal in a sports hall, they will run the night on paper instead. |
+| Members, venues, fees, settings, stats | An account, only | A PIN read out at a venue is not a credential for other people's money and history, and the second a group exists here that it does not own, it is guarding someone else's roster too. |
+
+Sign-in emails carry a six-digit code and a clickable link on one token, so using either
+burns the other. Codes take five wrong guesses before the token is destroyed, and requests
+are capped per address per hour — spent tokens count, so failing does not refill the budget.
+Only hashes are stored, for links and sessions alike.
+
+The sign-in form answers identically whether or not an address belongs to anyone. Keep it
+that way if you change the copy: the moment it says "no such account", it becomes a way to
+test who plays here.
+
+**Rotate the staff PIN when it leaks**, which it will — it gets read out at venues and
+pasted into group chats. Organizer → Members. It no longer reaches anything that spans
+sessions, so a leak costs you a stranger fiddling with tonight's court board, not your
+member list.
 
 ---
 
@@ -131,7 +224,13 @@ There is no SQLite fallback — one dialect, one schema, no drift. Point `DATABA
 
 ```bash
 cp .env.example .env.local     # fill in DATABASE_URL
-npm run db:push
+npm run db:migrate
 npm run db:seed                # demo data, dev branch only
 npm run dev
 ```
+
+The seed creates an organizer you can sign in as, at `organizer@example.com` — override it
+with `OWNER_EMAIL=you@example.com npm run db:seed`. With no `RESEND_API_KEY` set, the
+development build prints the code and the link on the sign-in screen and to the server log
+instead of emailing them, so a fresh clone can reach `/admin` before any mail provider
+exists. The production build never does that; it says mail is unconfigured instead.
