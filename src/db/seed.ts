@@ -4,6 +4,7 @@ import { openDb } from "./raw";
 import {
   bookings, checkIns, groupMembers, groups, matchPlayers, matchScores, matches,
   notifications, overrides, payments, preferences, sessionCosts, sessions, users, venues,
+  authEmails, authSessions, authTokens,
 } from "./schema";
 import { newId } from "@/lib/ids";
 import { colorFor } from "@/lib/format";
@@ -47,6 +48,7 @@ function at(dateIso: string, hhmm: string) {
 /** Child rows first: the foreign keys are real in Postgres. */
 async function wipe() {
   for (const table of [
+    authSessions, authEmails, authTokens,
     notifications, overrides, preferences, sessionCosts, payments,
     matchScores, matchPlayers, matches, checkIns, bookings,
     sessions, venues, groupMembers, groups, users,
@@ -75,6 +77,17 @@ async function main() {
   await db.insert(users).values(people);
 
   const owner = people[0];
+
+  // The demo organizer needs an email, or nothing can sign in to /admin.
+  // Overridable so a real clone can point it at a real inbox.
+  const ownerEmail = (process.env.OWNER_EMAIL || "organizer@example.com").toLowerCase();
+  await db.update(users).set({ email: ownerEmail }).where(eq(users.id, owner.id));
+  await db.insert(authEmails).values({
+    id: newId("aem"),
+    userId: owner.id,
+    email: ownerEmail,
+    createdAt: now,
+  });
 
   const groupId = newId("grp");
   await db.insert(groups)

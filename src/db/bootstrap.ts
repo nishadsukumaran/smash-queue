@@ -1,7 +1,7 @@
 import "./env";
 import { eq } from "drizzle-orm";
 import { openDb } from "./raw";
-import { groupMembers, groups, users, venues } from "./schema";
+import { authEmails, groupMembers, groups, users, venues } from "./schema";
 import { newId } from "@/lib/ids";
 import { colorFor } from "@/lib/format";
 import { DEFAULT_WEIGHTS, BALANCE_BY_TYPE } from "@/lib/queue-engine";
@@ -28,9 +28,17 @@ async function main() {
   const fee = Number(process.env.DEFAULT_FEE ?? 40);
   const courts = Number(process.env.COURT_COUNT ?? 4);
   const pin = (process.env.STAFF_PIN ?? "").trim();
+  const ownerEmail = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
 
   if (!/^\d{4,8}$/.test(pin)) {
     console.error("STAFF_PIN must be 4 to 8 digits. Refusing to bootstrap with a guessable PIN.");
+    process.exit(1);
+  }
+
+  // Without this the group exists but nobody can reach /admin: the organizer
+  // screens need an account, and an account is an email.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(ownerEmail)) {
+    console.error("OWNER_EMAIL must be a real address — it is how the organizer signs in.");
     process.exit(1);
   }
 
@@ -45,8 +53,16 @@ async function main() {
   await db.insert(users).values({
     id: ownerId,
     name: ownerName,
+    email: ownerEmail,
     avatarColor: colorFor(ownerName),
     rating: 1200,
+    createdAt: now,
+  });
+
+  await db.insert(authEmails).values({
+    id: newId("aem"),
+    userId: ownerId,
+    email: ownerEmail,
     createdAt: now,
   });
 

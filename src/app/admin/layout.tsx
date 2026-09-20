@@ -1,13 +1,15 @@
 import Link from "next/link";
-import { StaffGate } from "@/components/StaffGate";
+import { OrganizerGate } from "@/components/StaffGate";
 import { SubmitButton } from "@/components/SubmitButton";
-import { lockAction } from "@/server/form-actions";
+import { signOutAction } from "@/server/auth-actions";
+import { currentAccount } from "@/lib/auth";
 import { getGroup } from "@/server/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const group = await getGroup();
+  const account = await currentAccount();
   if (!group)
     return (
       <div className="card p-5 text-sm text-muted">
@@ -25,15 +27,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   ];
 
   return (
-    <StaffGate groupId={group.id} next="/admin">
+    <OrganizerGate groupId={group.id} next="/admin">
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <div>
             <p className="label">Organizer</p>
             <h1 className="text-xl font-extrabold">{group.name}</h1>
           </div>
-          <form action={lockAction} className="ml-auto">
-            <SubmitButton className="btn btn-ghost btn-sm">Lock</SubmitButton>
+          <form action={signOutAction} className="ml-auto flex items-center gap-2">
+            {account && (
+              <span className="hidden text-xs text-muted sm:inline">{account.name}</span>
+            )}
+            <SubmitButton className="btn btn-ghost btn-sm">Sign out</SubmitButton>
           </form>
         </div>
 
@@ -49,6 +54,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
         {children}
       </div>
-    </StaffGate>
+    </OrganizerGate>
   );
 }
