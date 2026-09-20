@@ -1,9 +1,12 @@
 import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
-import { getGroup, listMembers } from "@/server/queries";
+import { getGroup, listJoinRequests, listRoster } from "@/server/queries";
 import {
-  addMemberAction, memberActiveAction, memberRoleAction, selfSignupAction, updateGroupAction,
+  addMemberAction, decideJoinAction, memberActiveAction, memberRoleAction,
+  setJoinPolicyAction, updateGroupAction,
 } from "@/server/form-actions";
+import { joinPolicyOf } from "@/lib/join-policy";
+import { prettyDateTime } from "@/lib/format";
 import { ratingBand } from "@/lib/fairness";
 
 export const dynamic = "force-dynamic";
@@ -11,9 +14,17 @@ export const dynamic = "force-dynamic";
 export default async function MembersPage() {
   const group = await getGroup();
   if (!group) return null;
-  const members = await listMembers(group.id);
+  const [members, requests] = await Promise.all([
+    listRoster(group.id),
+    listJoinRequests(group.id),
+  ]);
 
-  const selfSignup = group.settings?.allowSelfSignup !== false;
+  const policy = joinPolicyOf(group.settings);
+  const policies = [
+    { key: "open" as const, title: "Open", blurb: "Anyone with the link adds themselves and is in straight away." },
+    { key: "approval" as const, title: "Approval", blurb: "They ask, you decide. Requests appear here." },
+    { key: "closed" as const, title: "Closed", blurb: "Only you add members. Nobody can ask." },
+  ];
 
   return (
     <div className="space-y-4">
@@ -47,24 +58,75 @@ export default async function MembersPage() {
         </p>
       </section>
 
+      {requests.length > 0 && (
+        <section className="card border-shuttle/40 p-4">
+          <h2 className="label text-shuttle">
+            Waiting to join ({requests.length})
+          </h2>
+          <ul className="mt-3 divide-y divide-line">
+            {requests.map(({ membership, user }) => (
+              <li key={membership.id} className="flex flex-wrap items-center gap-3 py-3">
+                <Avatar name={user.name} size={32} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">{user.name}</p>
+                  <p className="text-xs text-muted">
+                    {membership.requestedAt ? prettyDateTime(membership.requestedAt) : "just now"}
+                    {user.phone ? ` · ${user.phone}` : ""}
+                  </p>
+                  {membership.note && (
+                    <p className="mt-1 text-xs text-chalk/80">&ldquo;{membership.note}&rdquo;</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <form action={decideJoinAction}>
+                    <input type="hidden" name="groupId" value={group.id} />
+                    <input type="hidden" name="membershipId" value={membership.id} />
+                    <input type="hidden" name="decision" value="approve" />
+                    <SubmitButton className="btn btn-primary btn-sm">Let in</SubmitButton>
+                  </form>
+                  <form action={decideJoinAction}>
+                    <input type="hidden" name="groupId" value={group.id} />
+                    <input type="hidden" name="membershipId" value={membership.id} />
+                    <input type="hidden" name="decision" value="decline" />
+                    <SubmitButton className="btn btn-ghost btn-sm">Decline</SubmitButton>
+                  </form>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="card p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <h2 className="label">Anyone with the link can join</h2>
-            <p className="mt-1 text-xs text-muted">
-              {selfSignup
-                ? "A new player who opens the session link can add themselves to the group. Duplicate names are refused, so nobody ends up with two records."
-                : "Self sign-up is off. Only you can add members, and a new player has to ask."}
-            </p>
-          </div>
-          <form action={selfSignupAction}>
-            <input type="hidden" name="groupId" value={group.id} />
-            <input type="hidden" name="allow" value={selfSignup ? "0" : "1"} />
-            <SubmitButton className={selfSignup ? "btn btn-ghost btn-sm" : "btn btn-teal btn-sm"}>
-              {selfSignup ? "Turn off" : "Turn on"}
-            </SubmitButton>
-          </form>
+        <h2 className="label">How people join</h2>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          {policies.map((o) => (
+            <form key={o.key} action={setJoinPolicyAction}>
+              <input type="hidden" name="groupId" value={group.id} />
+              <input type="hidden" name="policy" value={o.key} />
+              <button
+                type="submit"
+                aria-pressed={policy === o.key}
+                className={`w-full rounded-xl border p-3 text-left transition ${
+                  policy === o.key
+                    ? "border-shuttle bg-shuttle/10"
+                    : "border-line hover:border-teal"
+                }`}
+              >
+                <span
+                  className={`text-sm font-bold ${policy === o.key ? "text-shuttle" : "text-chalk"}`}
+                >
+                  {o.title}
+                </span>
+                <span className="mt-1 block text-xs text-muted">{o.blurb}</span>
+              </button>
+            </form>
+          ))}
         </div>
+        <p className="mt-2 text-xs text-muted">
+          Duplicate names are refused whichever you pick, so nobody ends up with two records and
+          half their history on each.
+        </p>
       </section>
 
       <section className="card p-4">

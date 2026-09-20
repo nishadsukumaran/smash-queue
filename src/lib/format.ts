@@ -70,3 +70,25 @@ export function colorFor(seed: string) {
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return PLAYER_COLORS[h % PLAYER_COLORS.length];
 }
+
+/**
+ * A timestamp a person can place: "Sat 20 Sept, 21:14".
+ *
+ * Carries the date as well as the clock because this is used for things that
+ * may have happened days ago — a join request sitting unanswered over a week
+ * reads as "just now" if you only print the time.
+ */
+export function prettyDateTime(ts: number | Date | null | undefined) {
+  if (ts === null || ts === undefined) return "";
+  const d = ts instanceof Date ? ts : new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: TIME_ZONE,
+  });
+}

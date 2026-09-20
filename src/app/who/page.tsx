@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { NewPlayerForm } from "@/components/NewPlayerForm";
+import { joinPolicyOf } from "@/lib/join-policy";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getGroup, listMembers } from "@/server/queries";
 import { identityAction } from "@/server/form-actions";
@@ -19,6 +20,7 @@ export default async function WhoPage({
   if (!group) return <p className="card p-4 text-muted">No group yet.</p>;
 
   const [members, userId] = await Promise.all([listMembers(group.id), currentUserId()]);
+  const policy = joinPolicyOf(group.settings);
 
   return (
     <div className="space-y-4">
@@ -29,8 +31,12 @@ export default async function WhoPage({
         </p>
       </div>
 
-      {group.settings?.allowSelfSignup !== false && (
-        <NewPlayerForm groupId={group.id} next={next ?? "/"} />
+      {policy !== "closed" && (
+        <NewPlayerForm
+          groupId={group.id}
+          next={next ?? "/"}
+          needsApproval={policy === "approval"}
+        />
       )}
 
       <div className="card divide-y divide-line">

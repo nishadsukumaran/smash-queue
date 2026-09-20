@@ -63,6 +63,9 @@ export default async function Home() {
           <Link href="/guide" className="btn btn-ghost">
             How it works
           </Link>
+          <Link href="/members" className="btn btn-ghost">
+            Members
+          </Link>
           <Link href="/admin" className="btn btn-ghost">
             {staff ? "Organizer" : "Organizer sign in"}
           </Link>

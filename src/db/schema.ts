@@ -57,12 +57,20 @@ export type GroupSettings = {
   /** Ask players to confirm a score entered by someone else. */
   requireScoreConfirmation: boolean;
   /**
-   * Let someone who opens the session link add themselves to the group.
-   * Undefined counts as allowed, so groups created before this existed keep
-   * working. Turn it off and the organizer adds every member by hand.
+   * Superseded by joinPolicy. Kept so groups created before that existed keep
+   * behaving the way their organizer set them, and read only as a fallback.
    */
   allowSelfSignup?: boolean;
+  /**
+   * How somebody new gets in.
+   *   open     — they add themselves and are in straight away
+   *   approval — they ask, and an organizer says yes
+   *   closed   — the organizer adds everyone by hand
+   */
+  joinPolicy?: JoinPolicy;
 };
+
+export type JoinPolicy = "open" | "approval" | "closed";
 
 export type QueueWeights = {
   gamesFairness: number;
@@ -82,13 +90,28 @@ export const groupMembers = pgTable(
     groupId: text("group_id").notNull().references(() => groups.id),
     userId: text("user_id").notNull().references(() => users.id),
     role: text("role").$type<MemberRole>().notNull().default("player"),
-    status: text("status").$type<"active" | "inactive">().notNull().default("active"),
+    /**
+     * A join request is a membership that has not been agreed to yet, rather
+     * than a row in a separate table. Approving flips one field, and there is
+     * never a moment where two tables disagree about who is in the group.
+     */
+    status: text("status").$type<MemberStatus>().notNull().default("active"),
+    /** What they typed when asking to join. Helps the organizer place a name. */
+    note: text("note"),
+    requestedAt: ts("requested_at"),
+    decidedAt: ts("decided_at"),
+    decidedBy: text("decided_by"),
     joinedAt: ts("joined_at").notNull(),
   },
-  (t) => [index("gm_group_idx").on(t.groupId), index("gm_user_idx").on(t.userId)],
+  (t) => [
+    index("gm_group_idx").on(t.groupId),
+    index("gm_user_idx").on(t.userId),
+    index("gm_status_idx").on(t.groupId, t.status),
+  ],
 );
 
 export type MemberRole = "player" | "coordinator" | "organizer";
+export type MemberStatus = "active" | "inactive" | "pending" | "declined";
 
 /* ----------------------------------------------------------------- venues */
 

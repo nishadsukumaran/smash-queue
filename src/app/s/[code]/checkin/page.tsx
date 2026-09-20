@@ -4,6 +4,7 @@ import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Shuttle } from "@/components/Shuttle";
 import { NewPlayerForm } from "@/components/NewPlayerForm";
+import { joinPolicyOf } from "@/lib/join-policy";
 import { getGroup, getRoster, getSessionByCode, listMembers } from "@/server/queries";
 import { checkInAction } from "@/server/form-actions";
 import { currentUserId } from "@/lib/identity";
@@ -92,15 +93,18 @@ export default async function CheckInPage({
         <p className="mt-1 text-sm text-muted">Tap your name to join the queue.</p>
       </div>
 
-      {group?.settings?.allowSelfSignup !== false && (
+      {joinPolicyOf(group?.settings) !== "closed" && (
         <div className="card p-4">
           <h3 className="label">First time with this group?</h3>
           <p className="mt-1 text-sm text-muted">
-            Add yourself, then check in. You only do this once.
+            {joinPolicyOf(group?.settings) === "approval"
+              ? "Ask the organizer to let you in. They can also check you in by hand tonight."
+              : "Add yourself, then check in. You only do this once."}
           </p>
           <NewPlayerForm
             groupId={session.groupId}
             next={`/s/${session.code}/checkin?t=${encodeURIComponent(t ?? "")}`}
+            needsApproval={joinPolicyOf(group?.settings) === "approval"}
             compact
           />
         </div>

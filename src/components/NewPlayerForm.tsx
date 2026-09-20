@@ -15,23 +15,43 @@ export function NewPlayerForm({
   groupId,
   next,
   compact = false,
+  needsApproval = false,
 }: {
   groupId: string;
   next: string;
   compact?: boolean;
+  /** The group vets new members, so this is a request rather than a sign-up. */
+  needsApproval?: boolean;
 }) {
   const [state, formAction] = useActionState<RegisterState, FormData>(
     registerPlayerAction,
     null,
   );
 
+  // Waiting for an organizer. A distinct screen rather than a line of text,
+  // because the next thing they would otherwise do is try again.
+  if (state?.ok && state.pending) {
+    return (
+      <div className={compact ? "" : "card p-4"}>
+        <p className="label text-teal">Request sent</p>
+        <h2 className="mt-1 text-lg font-bold">{state.message}</h2>
+        <p className="mt-2 text-sm text-muted">
+          Nothing more to do. You&apos;ll be able to book as soon as they say yes — this phone
+          already knows who you are, so you won&apos;t have to type your name again.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className={compact ? "" : "card p-4"}>
       {!compact && (
         <>
-          <h2 className="label">New here?</h2>
+          <h2 className="label">{needsApproval ? "Ask to join" : "New here?"}</h2>
           <p className="mt-1 text-sm text-muted">
-            Add yourself to the group. Takes one tap and you&apos;re on the list for good.
+            {needsApproval
+              ? "This group checks new players in by hand. Leave your name and the organizer will let you in."
+              : "Add yourself to the group. Takes one tap and you're on the list for good."}
           </p>
         </>
       )}
@@ -48,9 +68,19 @@ export function NewPlayerForm({
           maxLength={40}
           required
         />
-        <SubmitButton className="btn btn-primary" pendingLabel="Adding...">
-          Add me
+        <SubmitButton className="btn btn-primary" pendingLabel={needsApproval ? "Sending..." : "Adding..."}>
+          {needsApproval ? "Ask to join" : "Add me"}
         </SubmitButton>
+
+        {needsApproval && (
+          <input
+            className="input sm:col-span-2"
+            name="note"
+            maxLength={300}
+            placeholder="Anything that helps them place you (optional)"
+            aria-label="A note for the organizer"
+          />
+        )}
 
         <details className="sm:col-span-2">
           <summary className="cursor-pointer text-xs text-muted">Add a phone number too</summary>

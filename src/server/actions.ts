@@ -12,6 +12,8 @@ import { newId, sessionCode } from "@/lib/ids";
 import { verifyCheckInToken } from "@/lib/qr";
 import { updateRatings } from "@/lib/fairness";
 import { colorFor } from "@/lib/format";
+import type { JoinPolicy } from "@/db/schema";
+import { joinPolicyOf } from "@/lib/join-policy";
 import { validCoords } from "@/lib/geocode";
 import { grantStaff, revokeStaff, setCurrentUserId, clearCurrentUser } from "@/lib/identity";
 import { DEFAULT_WEIGHTS, BALANCE_BY_TYPE } from "@/lib/queue-engine";
@@ -115,6 +117,8 @@ function nameKey(name: string) {
 export type RegisterResult = Result & {
   /** An existing member whose name matches. Offered instead of a duplicate. */
   duplicate?: { id: string; name: string };
+  /** The group vets new members, so this one is waiting rather than in. */
+  pending?: boolean;
 };
 
 /**
@@ -129,6 +133,7 @@ export async function registerPlayer(
   groupId: string,
   name: string,
   phone?: string,
+  note?: string,
 ): Promise<RegisterResult> {
   const clean = name.trim().replace(/\s+/g, " ");
   if (clean.length < 2) return { ok: false, message: "Please enter your name" };
@@ -137,7 +142,8 @@ export async function registerPlayer(
   const groupRows = await db.select().from(groups).where(eq(groups.id, groupId));
   const group = groupRows[0];
   if (!group) return { ok: false, message: "Group not found" };
-  if (group.settings?.allowSelfSignup === false)
+  const policy = joinPolicyOf(group.settings);
+  if (policy === "closed")
     return { ok: false, message: "The organizer adds members for this group. Ask them for an invite." };
 
   const existing = await db
@@ -165,18 +171,77 @@ export async function registerPlayer(
     rating: 1200,
     createdAt: now,
   });
+  const pending = policy === "approval";
   await db.insert(groupMembers).values({
     id: newId("gm"),
     groupId,
     userId,
     role: "player",
+    status: pending ? "pending" : "active",
+    note: note?.trim()?.slice(0, 300) || null,
+    requestedAt: pending ? now : null,
     joinedAt: now,
   });
 
-  // Remember them on this phone straight away, so the next tap is the booking.
+  // Remember them on this phone either way. A pending member still needs the
+  // app to know who they are, so the waiting screen is theirs rather than a
+  // generic one, and so approval does not make them introduce themselves again.
   await setCurrentUserId(userId);
   touch();
+
+  if (pending)
+    return {
+      ok: true,
+      id: userId,
+      pending: true,
+      message: `Thanks ${clean.split(" ")[0]}. The organizer will let you in.`,
+    };
+
   return { ok: true, id: userId, message: `Welcome, ${clean.split(" ")[0]}` };
+}
+
+export async function setJoinPolicy(groupId: string, policy: JoinPolicy): Promise<Result> {
+  if (!["open", "approval", "closed"].includes(policy))
+    return { ok: false, message: "Unknown join policy" };
+  const rows = await db.select().from(groups).where(eq(groups.id, groupId));
+  const group = rows[0];
+  if (!group) return { ok: false, message: "Group not found" };
+  await db
+    .update(groups)
+    .set({ settings: { ...group.settings, joinPolicy: policy } })
+    .where(eq(groups.id, groupId));
+  touch();
+  return { ok: true };
+}
+
+/**
+ * Lets somebody in, or turns them away.
+ *
+ * Declining keeps the row rather than deleting it: the person has a user
+ * record with a name that the duplicate guard needs to keep seeing, and an
+ * organizer who declines by mistake can undo it. It also means a second
+ * request updates the same row instead of stacking up.
+ */
+export async function decideJoinRequest(
+  membershipId: string,
+  decision: "approve" | "decline",
+  deciderId: string | null,
+): Promise<Result> {
+  const rows = await db.select().from(groupMembers).where(eq(groupMembers.id, membershipId));
+  const member = rows[0];
+  if (!member) return { ok: false, message: "Request not found" };
+  if (member.status !== "pending") return { ok: false, message: "Already decided" };
+
+  await db
+    .update(groupMembers)
+    .set({
+      status: decision === "approve" ? "active" : "declined",
+      decidedAt: new Date(),
+      decidedBy: deciderId,
+    })
+    .where(eq(groupMembers.id, membershipId));
+  touch();
+  return { ok: true };
 }
 
 export async function updateGroup(

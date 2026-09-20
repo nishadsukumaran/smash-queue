@@ -8,6 +8,7 @@
 
 import { redirect } from "next/navigation";
 import { currentUserId } from "@/lib/identity";
+import { canOrganize, currentAccount } from "@/lib/auth";
 import type { GameType, PaymentMethod, QueueMode } from "@/db/schema";
 import * as a from "./actions";
 import type { RegisterState } from "./register-types";
@@ -193,9 +194,36 @@ export async function registerPlayerAction(
   _prev: RegisterState,
   fd: FormData,
 ): Promise<RegisterState> {
-  const res = await a.registerPlayer(str(fd, "groupId"), str(fd, "name"), str(fd, "phone"));
-  if (res.ok) redirect(str(fd, "next") || "/");
+  const res = await a.registerPlayer(
+    str(fd, "groupId"),
+    str(fd, "name"),
+    str(fd, "phone"),
+    str(fd, "note"),
+  );
+  // A pending request must not bounce them into the session — they are not in
+  // it yet. Hold them on the form so it can say what happens next.
+  if (res.ok && !res.pending) redirect(str(fd, "next") || "/");
+  if (res.ok && res.pending) return { ok: true, pending: true, message: res.message };
   return { ok: false, message: res.message, duplicate: res.duplicate };
+}
+
+export async function decideJoinAction(fd: FormData) {
+  const account = await currentAccount();
+  const groupId = str(fd, "groupId");
+  // Only an organizer of this group decides who is in it. Without this the
+  // action is reachable by anyone who can post a form.
+  if (!canOrganize(account, groupId)) return;
+  await a.decideJoinRequest(
+    str(fd, "membershipId"),
+    str(fd, "decision") === "approve" ? "approve" : "decline",
+    account?.id ?? null,
+  );
+}
+
+export async function setJoinPolicyAction(fd: FormData) {
+  const groupId = str(fd, "groupId");
+  if (!canOrganize(await currentAccount(), groupId)) return;
+  await a.setJoinPolicy(groupId, str(fd, "policy") as "open" | "approval" | "closed");
 }
 
 export async function updateGroupAction(fd: FormData) {

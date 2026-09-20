@@ -130,6 +130,11 @@ async function main() {
         groupId,
         name: "Zayed Sports City, Hall 2",
         address: "Zayed Sports City, Abu Dhabi",
+        // Real coordinates, so the demo shows a map with something on it and
+        // the Directions link goes somewhere. The second venue is left without
+        // any, because "no location set" is a state the UI has to handle too.
+        latitude: 24.4164,
+        longitude: 54.4542,
         courtCount: 4,
       },
       {

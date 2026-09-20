@@ -4,4 +4,6 @@ export type RegisterState = {
   ok: boolean;
   message?: string;
   duplicate?: { id: string; name: string };
+  /** True when the group vets new members, so they are waiting rather than in. */
+  pending?: boolean;
 } | null;

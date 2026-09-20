@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   bookings, checkIns, groupMembers, groups, matchPlayers, matchScores, matches,
@@ -36,16 +36,46 @@ export async function listVenues(groupId: string) {
   return db.select().from(venues).where(eq(venues.groupId, groupId));
 }
 
+/**
+ * Members who can actually play. Active only, deliberately.
+ *
+ * This feeds the identity picker, check-in and the leaderboard, so anything
+ * it returns is somebody the app will let into a session. A pending join
+ * request appearing here would let the requester tap their own name and walk
+ * straight past the approval they were supposed to be waiting for.
+ */
 export async function listMembers(groupId: string) {
   return db
-    .select({
-      membership: groupMembers,
-      user: users,
-    })
+    .select({ membership: groupMembers, user: users })
     .from(groupMembers)
     .innerJoin(users, eq(users.id, groupMembers.userId))
-    .where(eq(groupMembers.groupId, groupId))
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.status, "active")))
     .orderBy(users.name);
+}
+
+/** The organizer's roster: everyone, including deactivated and declined. */
+export async function listRoster(groupId: string) {
+  return db
+    .select({ membership: groupMembers, user: users })
+    .from(groupMembers)
+    .innerJoin(users, eq(users.id, groupMembers.userId))
+    .where(
+      and(
+        eq(groupMembers.groupId, groupId),
+        notInArray(groupMembers.status, ["pending", "declined"]),
+      ),
+    )
+    .orderBy(users.name);
+}
+
+/** Waiting to be let in, oldest first — the queue the organizer works through. */
+export async function listJoinRequests(groupId: string) {
+  return db
+    .select({ membership: groupMembers, user: users })
+    .from(groupMembers)
+    .innerJoin(users, eq(users.id, groupMembers.userId))
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.status, "pending")))
+    .orderBy(groupMembers.requestedAt);
 }
 
 export async function listSessions(groupId: string) {
