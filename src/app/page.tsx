@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { Shuttle } from "@/components/Shuttle";
-import { getGroup, listSessions, getRoster } from "@/server/queries";
+import { getGroup, listSessions, getRoster, listAnnouncements } from "@/server/queries";
 import { currentUserId, isStaffFor } from "@/lib/identity";
 import { money, prettyDate, prettyTime } from "@/lib/format";
 import { SUPPORT_EMAIL, supportMailto } from "@/lib/brand";
+import { canStaff, currentAccount } from "@/lib/auth";
+import { markAnnouncementsRead } from "@/server/actions";
+import { Announcements } from "@/components/Announcements";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +24,13 @@ export default async function Home() {
     currentUserId(),
     isStaffFor(group.id),
   ]);
+
+  // Group-wide only here: session notices belong on the session page, where
+  // the people they concern already are.
+  const account = await currentAccount();
+  const notices = await listAnnouncements(group.id, { viewerId: userId });
+  const unreadIds = notices.filter((n) => n.unread).map((n) => n.announcement.id);
+  if (userId && unreadIds.length) await markAnnouncementsRead(unreadIds, userId);
 
   const live = all.filter((s) => s.status === "live");
   const upcoming = all
@@ -71,6 +81,13 @@ export default async function Home() {
           </Link>
         </div>
       </section>
+
+      <Announcements
+        rows={notices}
+        groupId={group.id}
+        canPost={canStaff(account, group.id) || staff}
+        title="Tell the group"
+      />
 
       {live.length > 0 && (
         <section className="space-y-3">

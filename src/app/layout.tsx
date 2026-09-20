@@ -40,8 +40,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-dvh">
         <header className="sticky top-0 z-30 border-b border-line/70 bg-ink/85 backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3 sm:gap-3">
-            <Link href="/" className="flex shrink-0 items-center gap-2 font-extrabold tracking-tight">
-              <span className="text-shuttle">
+            <Link
+              href="/"
+              className="group flex shrink-0 items-center gap-2 font-extrabold tracking-tight"
+            >
+              <span className="text-shuttle transition-transform duration-300 group-hover:-rotate-[25deg] group-active:scale-90">
                 <Shuttle size={24} />
               </span>
               <span className="text-[1.02rem]">

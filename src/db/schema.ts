@@ -320,6 +320,59 @@ export const notifications = pgTable(
   (t) => [index("notif_user_idx").on(t.userId)],
 );
 
+/* ---------------------------------------------------------- announcements */
+
+/**
+ * Something the organizer wants everyone to know.
+ *
+ * One row read by many, rather than a copy fanned out per member. Thirty
+ * copies of "shuttles are on me tonight" would mean thirty rows to edit when
+ * it turns out they are not, and thirty to delete when it was posted to the
+ * wrong session.
+ *
+ * `sessionId` is what makes it useful rather than just another feed: an
+ * announcement pinned to a session shows up on the page the people attending
+ * already have open, at the time it matters, instead of scrolling away in a
+ * chat thread.
+ */
+export const announcements = pgTable(
+  "announcements",
+  {
+    id: id(),
+    groupId: text("group_id").notNull().references(() => groups.id),
+    /** Null means it concerns the whole group rather than one night. */
+    sessionId: text("session_id").references(() => sessions.id),
+    authorId: text("author_id").notNull().references(() => users.id),
+    body: text("body").notNull(),
+    /** Keeps it at the top of the session page until taken down. */
+    pinned: boolean("pinned").notNull().default(false),
+    createdAt: ts("created_at").notNull(),
+    editedAt: ts("edited_at"),
+  },
+  (t) => [
+    index("ann_group_idx").on(t.groupId, t.createdAt),
+    index("ann_session_idx").on(t.sessionId),
+  ],
+);
+
+/**
+ * Who has seen what. Absence of a row means unread, so posting an
+ * announcement costs one insert rather than one per member.
+ */
+export const announcementReads = pgTable(
+  "announcement_reads",
+  {
+    id: id(),
+    announcementId: text("announcement_id").notNull().references(() => announcements.id),
+    userId: text("user_id").notNull().references(() => users.id),
+    readAt: ts("read_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("ann_read_once_idx").on(t.announcementId, t.userId),
+    index("ann_read_user_idx").on(t.userId),
+  ],
+);
+
 /* ------------------------------------------------------------------- auth */
 
 /**
@@ -414,3 +467,4 @@ export type Venue = typeof venues.$inferSelect;
 export type GroupMember = typeof groupMembers.$inferSelect;
 export type AuthSession = typeof authSessions.$inferSelect;
 export type AuthEmail = typeof authEmails.$inferSelect;
+export type Announcement = typeof announcements.$inferSelect;

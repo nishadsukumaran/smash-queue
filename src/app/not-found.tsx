@@ -4,8 +4,10 @@ import { SUPPORT_EMAIL, supportMailto } from "@/lib/brand";
 
 export default function NotFound() {
   return (
-    <div className="card p-8 text-center">
-      <div className="mx-auto w-fit text-shuttle/60">
+    <div className="card relative overflow-hidden p-8 text-center">
+      {/* The line the shuttle just landed the wrong side of. */}
+      <span className="pointer-events-none absolute inset-x-8 top-[4.6rem] h-px bg-line" />
+      <div className="shuttle-drop mx-auto w-fit -rotate-12 text-shuttle/60">
         <Shuttle size={44} />
       </div>
       <h1 className="mt-4 text-xl font-extrabold">Out of bounds</h1>

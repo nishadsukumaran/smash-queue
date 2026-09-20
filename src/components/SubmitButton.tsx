@@ -2,6 +2,8 @@
 
 import { useFormStatus } from "react-dom";
 import type { ReactNode } from "react";
+import { Shuttle } from "@/components/Shuttle";
+import { buzz } from "@/lib/haptics";
 
 export function SubmitButton({
   children,
@@ -9,17 +11,36 @@ export function SubmitButton({
   pendingLabel,
   disabled,
   title,
+  haptic = "tap",
 }: {
   children: ReactNode;
   className?: string;
   pendingLabel?: string;
   disabled?: boolean;
   title?: string;
+  haptic?: "tap" | "confirm" | "win" | "error" | "none";
 }) {
   const { pending } = useFormStatus();
   return (
-    <button type="submit" className={className} disabled={pending || disabled} title={title}>
-      {pending ? (pendingLabel ?? "Working...") : children}
+    <button
+      type="submit"
+      // The shimmer keeps sweeping while the server action is in flight, so a
+      // slow connection still looks like something is happening.
+      className={`${className}${pending ? " btn-working" : ""}`}
+      disabled={pending || disabled}
+      title={title}
+      onClick={() => haptic !== "none" && buzz(haptic)}
+    >
+      {pending ? (
+        <>
+          <span className="shuttle-spin inline-flex">
+            <Shuttle size={14} />
+          </span>
+          {pendingLabel ?? "Working..."}
+        </>
+      ) : (
+        children
+      )}
     </button>
   );
 }

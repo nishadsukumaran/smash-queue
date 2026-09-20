@@ -43,6 +43,13 @@
       "when": 1789929229886,
       "tag": "0005_join_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789930721921,
+      "tag": "0006_announcements",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
+  announcementReads, announcements,
   bookings, checkIns, groupMembers, groups, matchPlayers, matchScores, matches,
   notifications, overrides, payments, preferences, sessionCosts, sessions, users, venues,
   type Availability, type GameType, type PaymentMethod, type QueueMode, type QueueWeights,
@@ -984,5 +985,72 @@ export async function addPreference(
 export async function removePreference(preferenceId: string) {
   await db.delete(preferences).where(eq(preferences.id, preferenceId));
   touch();
+  return { ok: true };
+}
+
+/* ---------------------------------------------------------- announcements */
+
+const MAX_ANNOUNCEMENT = 1000;
+
+/**
+ * Posts a notice to the group, or to one session.
+ *
+ * Authorisation is the caller's job and is checked in the form action: this
+ * takes an author id it trusts. Body length is capped here rather than only in
+ * the form, because a server action is reachable without the form.
+ */
+export async function postAnnouncement(
+  groupId: string,
+  authorId: string,
+  body: string,
+  opts: { sessionId?: string | null; pinned?: boolean } = {},
+): Promise<Result> {
+  const text = body.trim();
+  if (text.length < 2) return { ok: false, message: "Nothing to post" };
+  if (text.length > MAX_ANNOUNCEMENT)
+    return { ok: false, message: `Keep it under ${MAX_ANNOUNCEMENT} characters` };
+
+  await db.insert(announcements).values({
+    id: newId("ann"),
+    groupId,
+    sessionId: opts.sessionId || null,
+    authorId,
+    body: text,
+    pinned: Boolean(opts.pinned),
+    createdAt: new Date(),
+  });
+  touch();
+  return { ok: true };
+}
+
+export async function deleteAnnouncement(announcementId: string): Promise<Result> {
+  // Read receipts reference the announcement, so they go first — the HTTP
+  // driver has no interactive transactions, and a stranded receipt would
+  // block the delete rather than being cleaned up later.
+  await db.delete(announcementReads).where(eq(announcementReads.announcementId, announcementId));
+  await db.delete(announcements).where(eq(announcements.id, announcementId));
+  touch();
+  return { ok: true };
+}
+
+export async function setAnnouncementPinned(announcementId: string, pinned: boolean) {
+  await db.update(announcements).set({ pinned }).where(eq(announcements.id, announcementId));
+  touch();
+  return { ok: true };
+}
+
+/**
+ * Records that somebody has seen these.
+ *
+ * Idempotent by way of the unique index: opening the same page twice inserts
+ * nothing the second time rather than erroring or double-counting.
+ */
+export async function markAnnouncementsRead(ids: string[], userId: string) {
+  if (!ids.length || !userId) return { ok: true };
+  const now = new Date();
+  await db
+    .insert(announcementReads)
+    .values(ids.map((announcementId) => ({ id: newId("anr"), announcementId, userId, readAt: now })))
+    .onConflictDoNothing();
   return { ok: true };
 }

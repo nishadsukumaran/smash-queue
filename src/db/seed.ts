@@ -4,7 +4,7 @@ import { openDb } from "./raw";
 import {
   bookings, checkIns, groupMembers, groups, matchPlayers, matchScores, matches,
   notifications, overrides, payments, preferences, sessionCosts, sessions, users, venues,
-  authEmails, authSessions, authTokens,
+  authEmails, authSessions, authTokens, announcements, announcementReads,
 } from "./schema";
 import { newId } from "@/lib/ids";
 import { colorFor } from "@/lib/format";
@@ -48,6 +48,10 @@ function at(dateIso: string, hhmm: string) {
 /** Child rows first: the foreign keys are real in Postgres. */
 async function wipe() {
   for (const table of [
+    // Announcement reads reference announcements, announcements reference
+    // sessions. Anything added here later has to go above what it points at,
+    // or the delete fails on the foreign key rather than cascading.
+    announcementReads, announcements,
     authSessions, authEmails, authTokens,
     notifications, overrides, preferences, sessionCosts, payments,
     matchScores, matchPlayers, matches, checkIns, bookings,

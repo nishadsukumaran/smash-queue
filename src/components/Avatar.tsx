@@ -4,10 +4,13 @@ export function Avatar({
   name,
   size = 34,
   dim = false,
+  onCourt = false,
 }: {
   name: string;
   size?: number;
   dim?: boolean;
+  /** Somebody mid-game gets a lit ring, so a court reads at arm's length. */
+  onCourt?: boolean;
 }) {
   const color = colorFor(name);
   return (
@@ -20,7 +23,9 @@ export function Avatar({
         color,
         fontSize: size * 0.36,
       }}
-      className="inline-flex shrink-0 items-center justify-center rounded-full font-bold tracking-tight"
+      className={`inline-flex shrink-0 items-center justify-center rounded-full font-bold tracking-tight transition-transform duration-200 ${
+        onCourt ? "on-court-ring" : ""
+      }`}
       aria-hidden
     >
       {initials(name)}

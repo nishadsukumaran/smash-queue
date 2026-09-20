@@ -7,14 +7,21 @@ import { Elapsed } from "@/components/Elapsed";
 import { StaffGate } from "@/components/StaffGate";
 import { CourtAssigner } from "@/components/CourtAssigner";
 import { FinishGame } from "@/components/FinishGame";
+import { CountUp } from "@/components/motion/CountUp";
+import { WinBurst, lastFinished } from "@/components/motion/WinBurst";
+import { Shuttle } from "@/components/Shuttle";
 import { getBoard, getSessionByCode } from "@/server/queries";
 import {
   cancelMatchAction, closeSessionAction, preferenceAction, removePreferenceAction,
   sessionSettingsAction, startMatchAction, startSessionAction,
 } from "@/server/form-actions";
 import { money } from "@/lib/format";
+import type { CSSProperties } from "react";
 
 export const dynamic = "force-dynamic";
+
+/** Stagger index, kept out of the markup so the JSX stays readable. */
+const step = (i: number) => ({ "--i": i }) as CSSProperties;
 
 export default async function BoardPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
@@ -45,8 +52,11 @@ async function Board({ code }: { code: string }) {
 
   if (session.status === "scheduled")
     return (
-      <div className="card p-5 text-center">
-        <p className="text-sm text-muted">This session has not started yet.</p>
+      <div className="card rise p-6 text-center">
+        <div className="mx-auto w-fit text-shuttle/70 shuttle-drop">
+          <Shuttle size={44} />
+        </div>
+        <p className="mt-4 text-sm text-muted">This session has not started yet.</p>
         <form action={startSessionAction} className="mt-4">
           <input type="hidden" name="sessionId" value={session.id} />
           <SubmitButton className="btn btn-primary">Open the session</SubmitButton>
@@ -73,24 +83,32 @@ async function Board({ code }: { code: string }) {
     <div className="space-y-4">
       <LiveRefresh seconds={5} />
 
+      <WinBurst match={lastFinished(board.matches)} />
+
       <div className="grid grid-cols-4 gap-2">
-        <Tile label="Checked in" value={String(board.checkedInCount)} />
-        <Tile label="Waiting" value={String(board.availableCount)} />
-        <Tile label="Courts" value={`${busy}/${session.courtCount}`} />
+        <Tile label="Checked in" value={board.checkedInCount} i={0} />
+        <Tile label="Waiting" value={board.availableCount} i={1} />
+        <Tile label="Courts" value={busy} of={session.courtCount} i={2} />
         <Tile
           label="Fairness"
-          value={`${board.fairness.score}%`}
+          value={board.fairness.score}
+          suffix="%"
+          i={3}
           tone={board.fairness.score >= 88 ? "good" : board.fairness.score >= 72 ? "warn" : "bad"}
         />
       </div>
 
       {/* ------------------------------------------------------ courts --- */}
       <div className="grid gap-3 lg:grid-cols-2">
-        {board.courts.map((c) => {
+        {board.courts.map((c, ci) => {
           const m = c.match;
           return (
-            <div key={c.court} className={`court p-4 ${m ? "court-live" : ""}`}>
-              <div className="flex items-center gap-2">
+            <div
+              key={c.court}
+              className={`court rise p-4 ${m ? "court-live" : "court-open"}`}
+              style={step(ci)}
+            >
+              <div className="relative flex items-center gap-2">
                 <span className="text-base font-extrabold">Court {c.court}</span>
                 <span className={`chip ${m ? "chip-live" : "chip-teal"}`}>
                   {m ? (m.status === "playing" ? "Playing" : "Ready") : "Open"}
@@ -103,7 +121,7 @@ async function Board({ code }: { code: string }) {
               </div>
 
               {m ? (
-                <div className="mt-3">
+                <div className="relative mt-3">
                   <Team players={m.teamA} label="Team A" />
                   <div className="court-net my-2" />
                   <Team players={m.teamB} label="Team B" />
@@ -139,7 +157,7 @@ async function Board({ code }: { code: string }) {
                   reasons={c.recommendation.reasons}
                 />
               ) : (
-                <p className="mt-4 text-sm text-muted">
+                <p className="relative mt-4 text-sm text-muted">
                   Not enough players free to fill this court yet.
                 </p>
               )}
@@ -161,8 +179,16 @@ async function Board({ code }: { code: string }) {
             <li className="py-3 text-sm text-muted">Everyone available is on court.</li>
           )}
           {board.ranked.map((r, i) => (
-            <li key={r.player.id} className="flex items-center gap-2 py-2">
-              <span className="w-5 text-xs text-muted tabular">{i + 1}</span>
+            <li
+              key={r.player.id}
+              className="rise flex items-center gap-2 py-2"
+              style={step(Math.min(i, 14))}
+            >
+              <span
+                className={`w-5 text-xs tabular ${i < 4 ? "font-bold text-shuttle" : "text-muted"}`}
+              >
+                {i + 1}
+              </span>
               <Avatar name={r.player.name} size={28} />
               <span className="min-w-0 flex-1 truncate text-sm font-medium">{r.player.name}</span>
               <span className="text-xs text-muted tabular">
@@ -283,11 +309,36 @@ async function Board({ code }: { code: string }) {
   );
 }
 
-function Tile({ label, value, tone }: { label: string; value: string; tone?: "good" | "warn" | "bad" }) {
-  const color = tone === "good" ? "text-teal" : tone === "warn" ? "text-amber" : tone === "bad" ? "text-rose" : "text-chalk";
+function Tile({
+  label,
+  value,
+  of,
+  suffix = "",
+  tone,
+  i = 0,
+}: {
+  label: string;
+  value: number;
+  /** Renders as "3/6" — the denominator is fixed, so only the numerator counts up. */
+  of?: number;
+  suffix?: string;
+  tone?: "good" | "warn" | "bad";
+  i?: number;
+}) {
+  const color =
+    tone === "good"
+      ? "text-teal"
+      : tone === "warn"
+        ? "text-amber"
+        : tone === "bad"
+          ? "text-rose"
+          : "text-chalk";
   return (
-    <div className="card p-3 text-center">
-      <p className={`text-xl font-extrabold tabular ${color}`}>{value}</p>
+    <div className="card pop p-3 text-center" style={step(i)}>
+      <p className={`text-xl font-extrabold ${color}`}>
+        <CountUp value={value} suffix={suffix} />
+        {of !== undefined && <span className="text-muted">/{of}</span>}
+      </p>
       <p className="text-[.6rem] uppercase tracking-wider text-muted">{label}</p>
     </div>
   );
@@ -300,7 +351,7 @@ function Team({ players, label }: { players: { id: string; name: string }[]; lab
       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
         {players.map((p) => (
           <span key={p.id} className="flex items-center gap-1.5">
-            <Avatar name={p.name} size={24} />
+            <Avatar name={p.name} size={24} onCourt />
             <span className="text-sm font-semibold">{p.name}</span>
           </span>
         ))}

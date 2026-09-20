@@ -7,8 +7,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { currentUserId } from "@/lib/identity";
-import { canOrganize, currentAccount } from "@/lib/auth";
+import { currentUserId, isStaffFor } from "@/lib/identity";
+import { canOrganize, canStaff, currentAccount } from "@/lib/auth";
 import type { GameType, PaymentMethod, QueueMode } from "@/db/schema";
 import * as a from "./actions";
 import type { RegisterState } from "./register-types";
@@ -263,4 +263,42 @@ export async function addVenueAction(fd: FormData) {
     str(fd, "latitude") || undefined,
     str(fd, "longitude") || undefined,
   );
+}
+
+/* ---------------------------------------------------------- announcements */
+
+/**
+ * Only staff for that group may post. The check is here rather than in the
+ * action because this is the reachable surface: a server action can be
+ * invoked without ever rendering the form that hides the button.
+ */
+export async function postAnnouncementAction(fd: FormData) {
+  const groupId = str(fd, "groupId");
+  const account = await currentAccount();
+
+  // A coordinator running tonight may be on the PIN rather than an account,
+  // so either proves they are staff. The author recorded is whoever we can
+  // actually name: an account if there is one, else the identity on the phone.
+  const staff = canStaff(account, groupId) || (await isStaffFor(groupId));
+  if (!staff) return;
+
+  const authorId = account?.id ?? (await currentUserId());
+  if (!authorId) return;
+
+  await a.postAnnouncement(groupId, authorId, str(fd, "body"), {
+    sessionId: str(fd, "sessionId") || null,
+    pinned: str(fd, "pinned") === "1",
+  });
+}
+
+export async function deleteAnnouncementAction(fd: FormData) {
+  const groupId = str(fd, "groupId");
+  if (!canStaff(await currentAccount(), groupId) && !(await isStaffFor(groupId))) return;
+  await a.deleteAnnouncement(str(fd, "announcementId"));
+}
+
+export async function pinAnnouncementAction(fd: FormData) {
+  const groupId = str(fd, "groupId");
+  if (!canStaff(await currentAccount(), groupId) && !(await isStaffFor(groupId))) return;
+  await a.setAnnouncementPinned(str(fd, "announcementId"), str(fd, "pinned") === "1");
 }

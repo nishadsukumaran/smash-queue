@@ -4,8 +4,11 @@ import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { Elapsed } from "@/components/Elapsed";
-import { getBoard, getSessionByCode } from "@/server/queries";
-import { currentUserId } from "@/lib/identity";
+import { getBoard, getSessionByCode, listAnnouncements } from "@/server/queries";
+import { currentUserId, isStaffFor } from "@/lib/identity";
+import { canStaff, currentAccount } from "@/lib/auth";
+import { markAnnouncementsRead } from "@/server/actions";
+import { Announcements } from "@/components/Announcements";
 import { availabilityAction, cancelAction, checkInAction, joinAction } from "@/server/form-actions";
 import { estimateQueuePosition } from "@/lib/queue-engine";
 import { clockTime, money, minutesSince } from "@/lib/format";
@@ -19,6 +22,19 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
 
   const [board, userId] = await Promise.all([getBoard(session.id), currentUserId()]);
   if (!board) notFound();
+
+  const [account, pinStaff] = await Promise.all([currentAccount(), isStaffFor(session.groupId)]);
+  const staff = canStaff(account, session.groupId) || pinStaff;
+  const notices = await listAnnouncements(session.groupId, {
+    sessionId: session.id,
+    viewerId: userId,
+  });
+
+  // Marked read on render rather than behind a button. They have been shown
+  // the text; asking them to also acknowledge it is a second job nobody does,
+  // and an unread badge that never clears is worse than none.
+  const unreadIds = notices.filter((n) => n.unread).map((n) => n.announcement.id);
+  if (userId && unreadIds.length) await markAnnouncementsRead(unreadIds, userId);
 
   const me = board.roster.find((r) => r.userId === userId) ?? null;
   const confirmed = board.roster.filter((r) => r.bookingStatus === "confirmed");
@@ -49,6 +65,15 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
   return (
     <div className="space-y-4">
       {isLive && <LiveRefresh seconds={6} />}
+
+      <Announcements
+        rows={notices}
+        groupId={session.groupId}
+        sessionId={session.id}
+        canPost={staff}
+        collapseRead
+        title="Tell everyone playing tonight"
+      />
 
       {!userId && (
         <div className="card border-shuttle/40 p-4">

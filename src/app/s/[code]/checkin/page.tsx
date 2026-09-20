@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Shuttle } from "@/components/Shuttle";
+import { CheckedIn } from "@/components/motion/CheckedIn";
 import { NewPlayerForm } from "@/components/NewPlayerForm";
 import { joinPolicyOf } from "@/lib/join-policy";
 import { getGroup, getRoster, getSessionByCode, listMembers } from "@/server/queries";
@@ -52,22 +53,21 @@ export default async function CheckInPage({
       </div>
     );
 
-  if (me?.checkedInAt)
+  if (me?.checkedInAt) {
+    // How many people are already waiting ahead — the one number a player
+    // actually wants the second they walk through the door.
+    const waiting = roster.filter(
+      (r) => r.checkedInAt && r.availability === "available" && r.onCourt === null,
+    ).length;
     return (
-      <div className="card p-6 text-center">
-        <div className="mx-auto w-fit text-shuttle">
-          <Shuttle size={48} />
-        </div>
-        <p className="chip chip-live mx-auto mt-4 w-fit">Checked in</p>
-        <h2 className="mt-3 text-xl font-extrabold">{me.name}, you&apos;re in</h2>
-        <p className="mt-1 text-sm text-muted">
-          Checked in at {clockTime(me.checkedInAt)}. You are in the queue.
-        </p>
-        <Link href={`/s/${session.code}`} className="btn btn-primary mt-5">
-          See my place in the queue
-        </Link>
-      </div>
+      <CheckedIn
+        name={me.name}
+        at={`Checked in at ${clockTime(me.checkedInAt)}`}
+        sessionCode={session.code}
+        queueNote={waiting > 1 ? `${waiting - 1} ahead of you` : "You are first up"}
+      />
     );
+  }
 
   if (meMember)
     return (
@@ -87,10 +87,20 @@ export default async function CheckInPage({
 
   return (
     <div className="space-y-4">
-      <div className="card p-4 text-center">
-        <p className="label">Check in</p>
-        <h2 className="mt-1 text-lg font-bold">{session.name}</h2>
-        <p className="mt-1 text-sm text-muted">Tap your name to join the queue.</p>
+      <div className="card relative overflow-hidden p-5 text-center rise">
+        <div className="rally-bg opacity-30">
+          <span style={{ "--dur": "6s", "--delay": "0s" } as React.CSSProperties}>
+            <Shuttle size={30} />
+          </span>
+          <span style={{ "--dur": "7.5s", "--delay": "2.4s" } as React.CSSProperties}>
+            <Shuttle size={20} />
+          </span>
+        </div>
+        <div className="relative">
+          <p className="label">Check in</p>
+          <h2 className="mt-1 text-xl font-extrabold tracking-tight">{session.name}</h2>
+          <p className="mt-1 text-sm text-muted">Tap your name to join the queue.</p>
+        </div>
       </div>
 
       {joinPolicyOf(group?.settings) !== "closed" && (
@@ -111,8 +121,13 @@ export default async function CheckInPage({
       )}
 
       <div className="card divide-y divide-line">
-        {members.map(({ user }) => (
-          <form key={user.id} action={checkInAction} className="flex items-center gap-3 p-3">
+        {members.map(({ user }, i) => (
+          <form
+            key={user.id}
+            action={checkInAction}
+            className="flex items-center gap-3 p-3 rise"
+            style={{ "--i": Math.min(i, 14) } as React.CSSProperties}
+          >
             <input type="hidden" name="sessionId" value={session.id} />
             <input type="hidden" name="userId" value={user.id} />
             <input type="hidden" name="method" value="qr" />

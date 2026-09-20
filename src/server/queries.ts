@@ -1,7 +1,8 @@
 import "server-only";
-import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  announcementReads, announcements,
   bookings, checkIns, groupMembers, groups, matchPlayers, matchScores, matches,
   overrides, payments, preferences, sessionCosts, sessions, users, venues,
   type Availability, type BookingStatus, type PaymentStatus,
@@ -579,4 +580,78 @@ export async function getLeaderboard(groupId: string) {
   return stats
     .filter((s): s is PlayerStats => Boolean(s))
     .sort((a, b) => b.user.rating - a.user.rating || b.games - a.games);
+}
+
+/* ---------------------------------------------------------- announcements */
+
+export type AnnouncementRow = {
+  announcement: typeof announcements.$inferSelect;
+  author: { id: string; name: string };
+  unread: boolean;
+};
+
+/**
+ * Announcements for a group, newest first, with pinned ones held at the top.
+ *
+ * `sessionId` widens rather than narrows: a session page shows the notices
+ * pinned to that night *and* the group-wide ones, because "the venue moved"
+ * matters just as much whether or not somebody remembered to attach it to a
+ * session.
+ */
+export async function listAnnouncements(
+  groupId: string,
+  opts: { sessionId?: string | null; viewerId?: string | null; limit?: number } = {},
+): Promise<AnnouncementRow[]> {
+  const { sessionId, viewerId, limit = 20 } = opts;
+
+  const where = sessionId
+    ? and(
+        eq(announcements.groupId, groupId),
+        or(eq(announcements.sessionId, sessionId), isNull(announcements.sessionId)),
+      )
+    : and(eq(announcements.groupId, groupId), isNull(announcements.sessionId));
+
+  const rows = await db
+    .select({ announcement: announcements, author: users })
+    .from(announcements)
+    .innerJoin(users, eq(users.id, announcements.authorId))
+    .where(where)
+    .orderBy(desc(announcements.pinned), desc(announcements.createdAt))
+    .limit(limit);
+
+  if (rows.length === 0) return [];
+
+  // One query for the viewer's read receipts rather than one per row.
+  const seen = viewerId
+    ? new Set(
+        (
+          await db
+            .select({ id: announcementReads.announcementId })
+            .from(announcementReads)
+            .where(
+              and(
+                eq(announcementReads.userId, viewerId),
+                inArray(
+                  announcementReads.announcementId,
+                  rows.map((r) => r.announcement.id),
+                ),
+              ),
+            )
+        ).map((r) => r.id),
+      )
+    : new Set<string>();
+
+  return rows.map((r) => ({
+    announcement: r.announcement,
+    author: { id: r.author.id, name: r.author.name },
+    // Your own post is never "unread" — you wrote it.
+    unread: Boolean(viewerId) && r.author.id !== viewerId && !seen.has(r.announcement.id),
+  }));
+}
+
+/** How many group-wide announcements this person has not opened yet. */
+export async function unreadAnnouncementCount(groupId: string, viewerId: string | null) {
+  if (!viewerId) return 0;
+  const rows = await listAnnouncements(groupId, { viewerId, limit: 50 });
+  return rows.filter((r) => r.unread).length;
 }
