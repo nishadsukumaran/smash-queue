@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
-import { getGroup, getLeaderboard } from "@/server/queries";
+import { getLeaderboard } from "@/server/queries";
+import { activeCommunity } from "@/lib/tenant";
 import { currentUserId } from "@/lib/identity";
 import { ratingBand } from "@/lib/fairness";
 
@@ -19,8 +21,9 @@ export const dynamic = "force-dynamic";
  * has.
  */
 export default async function MembersDirectoryPage() {
-  const group = await getGroup();
-  if (!group) return <p className="card p-4 text-muted">No group yet.</p>;
+  const membership = await activeCommunity();
+  if (!membership) redirect("/communities");
+  const group = membership.group;
 
   const [board, meId] = await Promise.all([getLeaderboard(group.id), currentUserId()]);
   const people = [...board].sort((a, b) => a.user.name.localeCompare(b.user.name));

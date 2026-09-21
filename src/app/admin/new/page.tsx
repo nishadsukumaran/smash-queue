@@ -1,5 +1,6 @@
 import { SubmitButton } from "@/components/SubmitButton";
-import { getGroup, listVenues } from "@/server/queries";
+import { activeCommunity } from "@/lib/tenant";
+import { listVenues } from "@/server/queries";
 import { createSessionAction } from "@/server/form-actions";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +12,9 @@ function nextSaturday() {
 }
 
 export default async function NewSessionPage() {
-  const group = await getGroup();
-  if (!group) return null;
+  const active = await activeCommunity();
+  if (!active) return null;
+  const group = active.group;
   const venues = await listVenues(group.id);
 
   return (

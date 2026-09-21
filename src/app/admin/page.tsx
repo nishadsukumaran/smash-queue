@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { getGroup, getRoster, listSessions } from "@/server/queries";
+import { activeCommunity } from "@/lib/tenant";
+import { getRoster, listSessions } from "@/server/queries";
 import { money, prettyDate, prettyTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminHome() {
-  const group = await getGroup();
-  if (!group) return null;
+  const active = await activeCommunity();
+  if (!active) return null;
+  const group = active.group;
 
   const all = await listSessions(group.id);
   const rosters = await Promise.all(all.map((s) => getRoster(s.id)));

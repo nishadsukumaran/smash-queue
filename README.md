@@ -319,6 +319,32 @@ Everything in PRD §31 (MVP scope):
 
 ---
 
+## Communities
+
+One deployment runs any number of badminton communities, each with its own venues,
+sessions, roster, fees and PIN. Three roles, deliberately kept apart:
+
+| Role | Scope | Can |
+| :--- | :--- | :--- |
+| **Platform admin** | The whole platform (`/hq`) | Create communities, appoint and remove their organizers, archive them |
+| **Organizer** | One community (`/admin`) | Venues, sessions, fees, members, join policy, invitations, co-organizers |
+| **Player** | Communities they have joined | See and book those sessions only |
+
+A player sees nothing of a community they have not joined — no sessions, roster, scores or
+money. Getting in:
+
+| Door | Route | Result |
+| :--- | :--- | :--- |
+| Personal invitation | `/i/<token>` | Straight in. Single-use, 14 days, only the SHA-256 is stored |
+| Share link or code | `/join/<CODE>` | Follows the join policy: open, approval or closed |
+| Public directory | `/communities` → `/c/<slug>` | Same, for communities that chose to be listed |
+| QR at the door | `/s/<code>/checkin` | Same, so newcomers can still join on the night |
+
+Every server action resolves the community its target actually belongs to (session, match,
+membership, cost, announcement) and checks the caller against that — never against a
+`groupId` field the browser sent. The end-to-end suite includes forging that field to reach
+another community, alongside a control proving the same form works on the caller's own.
+
 ## Who can see what
 
 Players never sign in. They tap their name once and the phone remembers — no account, no
@@ -406,6 +432,7 @@ phone with one bar of signal in a sports hall.
 | `RESEND_API_KEY` | none | Sends sign-in codes. Without it, dev prints them; production says so rather than pretending |
 | `MAIL_FROM` | Resend sandbox | `Smash Queue <noreply@yourdomain>`, on a domain Resend has verified |
 | `OWNER_EMAIL` | — | `db:bootstrap` only. How the first organizer signs in, so it is required there |
+| `PLATFORM_ADMINS` | none | Comma-separated sign-in addresses promoted to platform admin on their next sign-in. Written through to the database, so it can be removed afterwards |
 | `APP_BASE_URL` | derived from request | Optional. QR codes normally follow the domain they're served from |
 | `NEXT_PUBLIC_TIME_ZONE` | `Asia/Dubai` | Wall-clock times. A UTC server shows Gulf check-ins four hours early without it |
 | `PORT` | `3000` | `PORT=3210 npm run dev` when 3000 is taken |

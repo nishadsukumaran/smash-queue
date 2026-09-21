@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { MemberGate, canSeeSession } from "@/components/MemberGate";
 import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getMatches, getSessionByCode } from "@/server/queries";
@@ -12,6 +13,8 @@ export default async function GamesPage({ params }: { params: Promise<{ code: st
   const { code } = await params;
   const session = await getSessionByCode(code);
   if (!session) notFound();
+  if (!(await canSeeSession(session.groupId)))
+    return <MemberGate groupId={session.groupId} code={session.code}>{null}</MemberGate>;
 
   const [all, staff, userId] = await Promise.all([
     getMatches(session.id),

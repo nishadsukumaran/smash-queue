@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MemberGate, canSeeSession } from "@/components/MemberGate";
 import { notFound } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -19,6 +20,8 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
   const { code } = await params;
   const session = await getSessionByCode(code);
   if (!session) notFound();
+  if (!(await canSeeSession(session.groupId)))
+    return <MemberGate groupId={session.groupId} code={session.code}>{null}</MemberGate>;
 
   const [board, userId] = await Promise.all([getBoard(session.id), currentUserId()]);
   if (!board) notFound();

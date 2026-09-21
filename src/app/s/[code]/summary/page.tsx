@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MemberGate, canSeeSession } from "@/components/MemberGate";
 import { notFound } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { CountUp } from "@/components/motion/CountUp";
@@ -14,6 +15,8 @@ export default async function SummaryPage({ params }: { params: Promise<{ code: 
   const { code } = await params;
   const session = await getSessionByCode(code);
   if (!session) notFound();
+  if (!(await canSeeSession(session.groupId)))
+    return <MemberGate groupId={session.groupId} code={session.code}>{null}</MemberGate>;
   const s = await getSessionSummary(session.id);
   if (!s) notFound();
 

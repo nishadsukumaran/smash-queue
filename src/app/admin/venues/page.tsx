@@ -1,4 +1,5 @@
-import { getGroup, listVenues } from "@/server/queries";
+import { listVenues } from "@/server/queries";
+import { activeCommunity } from "@/lib/tenant";
 import { VenueForm } from "@/components/VenueForm";
 import { VenueMap } from "@/components/VenueMap";
 import { directionsUrl, validCoords } from "@/lib/geocode";
@@ -6,8 +7,9 @@ import { directionsUrl, validCoords } from "@/lib/geocode";
 export const dynamic = "force-dynamic";
 
 export default async function VenuesPage() {
-  const group = await getGroup();
-  if (!group) return null;
+  const active = await activeCommunity();
+  if (!active) return null;
+  const group = active.group;
   const venues = await listVenues(group.id);
 
   return (

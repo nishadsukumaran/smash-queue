@@ -1,12 +1,14 @@
 import { Avatar } from "@/components/Avatar";
-import { getGroup, getLeaderboard } from "@/server/queries";
+import { activeCommunity } from "@/lib/tenant";
+import { getLeaderboard } from "@/server/queries";
 import { ratingBand } from "@/lib/fairness";
 
 export const dynamic = "force-dynamic";
 
 export default async function StatsPage() {
-  const group = await getGroup();
-  if (!group) return null;
+  const active = await activeCommunity();
+  if (!active) return null;
+  const group = active.group;
   const board = await getLeaderboard(group.id);
   const played = board.filter((p) => p.games > 0);
 

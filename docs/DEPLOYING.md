@@ -40,7 +40,7 @@ migration in order. A database created by an older `db:push` gets baselined — 
 written as though the first migration had run, because the tables it would create are
 already there — and everything after it applies normally. Running it twice does nothing.
 
-### 2. Create the group
+### 2. Create the first community
 
 ```bash
 GROUP_NAME="Abu Dhabi Smashers" \
@@ -69,8 +69,9 @@ Every input, with its default:
 | `COURT_COUNT` | `4` | The venue's courts, overridable per session |
 | `POINTS_TO` | `30` | Points a game is played to |
 
-This creates the group, its first venue and you as organizer. Nothing else — no demo players,
-no fake match history. It refuses to run twice.
+This creates the first community, its first venue and you as its organizer **and platform
+admin**. Nothing else — no demo players, no fake match history. It refuses to run twice:
+every community after the first is created from `/hq` by a platform admin, in the app.
 
 `OWNER_EMAIL` is required and is how you sign in. Without it the group exists but nobody can
 reach `/admin`, because the organizer screens take an account and an account is an email.
@@ -78,9 +79,20 @@ reach `/admin`, because the organizer screens take an account and an account is 
 To add a second sign-in address later, or to give an existing player staff rights:
 
 ```bash
-npm run db:grant-admin -- "Their Name" them@example.com            # organizer
+npm run db:grant-admin -- "Their Name" them@example.com                         # organizer
 npm run db:grant-admin -- "Their Name" them@example.com coordinator
+npm run db:grant-admin -- "Their Name" them@example.com organizer <slug>        # with >1 community
+npm run db:grant-admin -- "Their Name" them@example.com platform                # platform admin
 ```
+
+With more than one community on the deployment the script needs the community's slug and
+refuses without it — granting "everywhere" would hand a new organizer every community's
+roster and money. Usually you won't need the script at all: organizers appoint
+co-organizers from **Members**, and platform admins appoint organizers from `/hq`.
+
+Setting `PLATFORM_ADMINS` (comma-separated sign-in addresses) is the other way to make a
+platform admin: those accounts are promoted on their next sign-in, the flag is written to
+the database, and the variable can then be removed.
 
 Run it twice with two addresses to give **one person** two ways in — a personal address and
 a work one, say. It attaches them to the existing player rather than creating a second

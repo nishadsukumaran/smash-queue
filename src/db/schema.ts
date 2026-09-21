@@ -28,6 +28,14 @@ export const users = pgTable(
     rating: doublePrecision("rating").notNull().default(1200),
     ratingGames: integer("rating_games").notNull().default(0),
     active: boolean("active").notNull().default(true),
+    /**
+     * Runs the platform itself: creates communities and appoints their
+     * organizers. Deliberately a column rather than a role in `group_members`,
+     * because it is precisely the permission that is not scoped to a
+     * community — a row in one group's membership table has no business
+     * granting rights over another group's.
+     */
+    platformAdmin: boolean("platform_admin").notNull().default(false),
     createdAt: ts("created_at").notNull(),
   },
   // Postgres allows many NULLs under a unique index, so players without an
@@ -37,17 +45,60 @@ export const users = pgTable(
 
 /* ----------------------------------------------------------------- groups */
 
-export const groups = pgTable("groups", {
-  id: id(),
-  name: text("name").notNull(),
-  ownerId: text("owner_id").notNull().references(() => users.id),
-  location: text("location"),
-  defaultFee: doublePrecision("default_fee").notNull().default(40),
-  currency: text("currency").notNull().default("AED"),
-  /** JSON: default queue weights, game type, points-to, staff PIN. */
-  settings: jsonb("settings").$type<GroupSettings>().notNull(),
-  createdAt: ts("created_at").notNull(),
-});
+/**
+ * A community: one badminton crowd, its venues, its sessions, its money.
+ *
+ * Still called `groups` in the database because renaming a table that eight
+ * others point at buys nothing but risk. The interface says "community"
+ * because that is the word the people using it use.
+ *
+ * Everything below hangs off a community. Nothing is global except the
+ * platform admin who creates them.
+ */
+export const groups = pgTable(
+  "groups",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    /** Lowercase, hyphenated, unique. The community's address: /c/<slug>. */
+    slug: text("slug").notNull(),
+    ownerId: text("owner_id").notNull().references(() => users.id),
+    location: text("location"),
+    description: text("description"),
+    /**
+     * public  — listed in the directory; anyone can find it and ask to join
+     * private — reachable only by invite link or code
+     *
+     * Orthogonal to joinPolicy, which decides what happens once somebody has
+     * found it. A public community can still vet every request; a private one
+     * can still let invited people straight in.
+     */
+    visibility: text("visibility").$type<Visibility>().notNull().default("private"),
+    /**
+     * The shareable half of an invite: short, uppercase, pasted into WhatsApp
+     * or typed off a poster. Rotatable, because a code that has leaked is only
+     * a problem until it is replaced.
+     */
+    inviteCode: text("invite_code").notNull(),
+    defaultFee: doublePrecision("default_fee").notNull().default(40),
+    currency: text("currency").notNull().default("AED"),
+    /** JSON: default queue weights, game type, points-to, staff PIN. */
+    settings: jsonb("settings").$type<GroupSettings>().notNull(),
+    /**
+     * Set rather than deleted. A community with a season of match history,
+     * ratings and payments behind it should never be removable by one click,
+     * and an archived one still has to render its own past.
+     */
+    archivedAt: ts("archived_at"),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("groups_slug_idx").on(t.slug),
+    uniqueIndex("groups_invite_code_idx").on(t.inviteCode),
+  ],
+);
+
+export type Visibility = "public" | "private";
 
 export type GroupSettings = {
   staffPin: string;
@@ -112,6 +163,46 @@ export const groupMembers = pgTable(
 
 export type MemberRole = "player" | "coordinator" | "organizer";
 export type MemberStatus = "active" | "inactive" | "pending" | "declined";
+
+/**
+ * An invitation addressed to one person, as opposed to the community's
+ * shareable code.
+ *
+ * The difference matters. A code in a WhatsApp group is a door anyone who
+ * scrolls up can walk through, so it hands the newcomer whatever the join
+ * policy says — usually a request an organizer still has to approve. An
+ * invitation is the organizer naming somebody in advance, so accepting it is
+ * the approval and there is nothing left to wait for.
+ *
+ * Only the SHA-256 of the token is stored, for the same reason as sign-in
+ * links: the thing in the email is a bearer credential, and a database dump
+ * should not contain working ones.
+ */
+export const groupInvites = pgTable(
+  "group_invites",
+  {
+    id: id(),
+    groupId: text("group_id").notNull().references(() => groups.id),
+    /** Lowercased. Null for a link the organizer hands over in person. */
+    email: text("email"),
+    /** What to call them before they have typed a name themselves. */
+    name: text("name"),
+    tokenHash: text("token_hash").notNull(),
+    /** Invites can appoint coordinators and organizers, not only players. */
+    role: text("role").$type<MemberRole>().notNull().default("player"),
+    invitedBy: text("invited_by").references(() => users.id),
+    expiresAt: ts("expires_at").notNull(),
+    acceptedAt: ts("accepted_at"),
+    acceptedBy: text("accepted_by").references(() => users.id),
+    /** Withdrawn before it was used. Kept so the organizer can see it happened. */
+    revokedAt: ts("revoked_at"),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("invite_token_idx").on(t.tokenHash),
+    index("invite_group_idx").on(t.groupId),
+  ],
+);
 
 /* ----------------------------------------------------------------- venues */
 
@@ -468,3 +559,5 @@ export type GroupMember = typeof groupMembers.$inferSelect;
 export type AuthSession = typeof authSessions.$inferSelect;
 export type AuthEmail = typeof authEmails.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
+export type Group = typeof groups.$inferSelect;
+export type GroupInvite = typeof groupInvites.$inferSelect;

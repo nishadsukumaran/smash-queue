@@ -249,9 +249,31 @@ export type Account = {
   id: string;
   name: string;
   email: string | null;
+  /**
+   * Runs the platform: creates communities, appoints their organizers, and by
+   * extension can reach any community's organizer screens. Somebody has to be
+   * able to fix a community whose only organizer has left the country.
+   */
+  platformAdmin: boolean;
   /** Groups where this account is a coordinator or organizer, most recent first. */
   memberships: Array<{ groupId: string; role: MemberRole }>;
 };
+
+/**
+ * Break-glass list of platform admins, by sign-in address.
+ *
+ * The database column is the real authority. This exists so a fresh
+ * deployment has somebody who can get into /hq before anybody has been able
+ * to get into /hq — the bootstrap problem every admin console has. Listing an
+ * address here promotes it on next sign-in and then the column carries it, so
+ * the variable can be removed again afterwards.
+ */
+function envAdmins(): string[] {
+  return (process.env.PLATFORM_ADMINS ?? "")
+    .split(/[,\s]+/)
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
 
 /**
  * The signed-in account, or null. Read this rather than trusting a cookie:
@@ -278,25 +300,61 @@ export async function currentAccount(): Promise<Account | null> {
     .where(and(eq(groupMembers.userId, user.id), eq(groupMembers.status, "active")))
     .orderBy(desc(groupMembers.joinedAt));
 
+  // Promotion from the environment is checked only for accounts that are not
+  // already admins, so the usual request pays nothing for it.
+  let platformAdmin = user.platformAdmin;
+  if (!platformAdmin) {
+    const listed = envAdmins();
+    if (listed.length) {
+      const addresses = await db
+        .select({ email: authEmails.email })
+        .from(authEmails)
+        .where(eq(authEmails.userId, user.id));
+      if (addresses.some((a) => listed.includes(a.email))) {
+        // Written through rather than evaluated on every request: the column
+        // becomes the single authority, and the variable can then go away.
+        await db.update(users).set({ platformAdmin: true }).where(eq(users.id, user.id));
+        platformAdmin = true;
+      }
+    }
+  }
+
   return {
     id: user.id,
     name: user.name,
     email: user.email,
+    platformAdmin,
     memberships: memberships.map((m) => ({ groupId: m.groupId, role: m.role })),
   };
+}
+
+/** Runs the platform itself. Not scoped to any one community. */
+export function isPlatformAdmin(account: Account | null) {
+  return account?.platformAdmin === true;
 }
 
 /** True when the account may run sessions for this group. */
 export function canStaff(account: Account | null, groupId: string) {
   if (!account) return false;
+  if (account.platformAdmin) return true;
   return account.memberships.some(
     (m) => m.groupId === groupId && (m.role === "coordinator" || m.role === "organizer"),
   );
 }
 
-/** True when the account owns the group: members, venues, fees, settings. */
+/**
+ * True when the account runs this community: members, venues, fees, settings.
+ *
+ * Platform admins pass here for every community. That is a real grant of
+ * access to other people's rosters and money, and it is deliberate: the
+ * person who creates communities and appoints their organizers is already
+ * trusted with exactly that, and a platform with no way to recover a
+ * community whose organizer has vanished is a platform with a support queue
+ * it cannot answer.
+ */
 export function canOrganize(account: Account | null, groupId: string) {
   if (!account) return false;
+  if (account.platformAdmin) return true;
   return account.memberships.some((m) => m.groupId === groupId && m.role === "organizer");
 }
 

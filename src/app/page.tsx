@@ -1,23 +1,29 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Shuttle } from "@/components/Shuttle";
-import { getGroup, listSessions, getRoster, listAnnouncements } from "@/server/queries";
+import { listSessions, getRoster, listAnnouncements } from "@/server/queries";
 import { currentUserId, isStaffFor } from "@/lib/identity";
 import { money, prettyDate, prettyTime } from "@/lib/format";
 import { SUPPORT_EMAIL, supportMailto } from "@/lib/brand";
-import { canStaff, currentAccount } from "@/lib/auth";
+import { canStaff, currentAccount, isPlatformAdmin } from "@/lib/auth";
+import { activeCommunity, myCommunities } from "@/lib/tenant";
 import { markAnnouncementsRead } from "@/server/actions";
 import { Announcements } from "@/components/Announcements";
+import { CommunitySwitcher } from "@/components/CommunitySwitcher";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const group = await getGroup();
-  if (!group)
-    return (
-      <div className="card p-6">
-        <p className="text-muted">No group yet. Run <code className="text-shuttle">npm run setup</code>.</p>
-      </div>
-    );
+  const account = await currentAccount();
+
+  // Sessions belong to a community, so somebody who is in none has nothing to
+  // be shown here. The directory is the honest answer, not an empty list that
+  // looks like the app is broken.
+  const active = await activeCommunity(account);
+  if (!active) redirect("/communities");
+
+  const group = active.group;
+  const mine = await myCommunities(account);
 
   const [all, userId, staff] = await Promise.all([
     listSessions(group.id),
@@ -27,7 +33,6 @@ export default async function Home() {
 
   // Group-wide only here: session notices belong on the session page, where
   // the people they concern already are.
-  const account = await currentAccount();
   const notices = await listAnnouncements(group.id, { viewerId: userId });
   const unreadIds = notices.filter((n) => n.unread).map((n) => n.announcement.id);
   if (userId && unreadIds.length) await markAnnouncementsRead(unreadIds, userId);
@@ -46,6 +51,8 @@ export default async function Home() {
 
   return (
     <div className="space-y-6">
+      <CommunitySwitcher mine={mine} activeId={group.id} />
+
       <section className="card relative overflow-hidden p-5">
         <div className="absolute -right-8 -top-8 text-shuttle/10">
           <Shuttle size={150} />
@@ -76,9 +83,17 @@ export default async function Home() {
           <Link href="/members" className="btn btn-ghost">
             Members
           </Link>
+          <Link href="/communities" className="btn btn-ghost">
+            Communities
+          </Link>
           <Link href="/admin" className="btn btn-ghost">
             {staff ? "Organizer" : "Organizer sign in"}
           </Link>
+          {isPlatformAdmin(account) && (
+            <Link href="/hq" className="btn btn-ghost">
+              Platform
+            </Link>
+          )}
         </div>
       </section>
 

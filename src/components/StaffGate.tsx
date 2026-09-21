@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SubmitButton } from "@/components/SubmitButton";
 import { pinAction } from "@/server/form-actions";
 import { isStaffFor } from "@/lib/identity";
-import { currentAccount, canStaff, canOrganize } from "@/lib/auth";
+import { currentAccount, canStaff, canOrganize, isPlatformAdmin } from "@/lib/auth";
 import { SUPPORT_EMAIL, supportMailto } from "@/lib/brand";
 
 /**
@@ -143,6 +143,56 @@ export async function OrganizerGate({
       eyebrow="Organizer access"
       title="Sign in to continue"
       blurb="Members, venues, fees and settings need an account. The session PIN doesn't reach this far."
+    >
+      <Link
+        href={`/signin?next=${encodeURIComponent(next)}`}
+        className="btn btn-primary mt-4 w-full"
+      >
+        Email me a sign-in link
+      </Link>
+    </GateShell>
+  );
+}
+
+/**
+ * The platform console. A third gate rather than a stricter organizer gate,
+ * because the thing it protects is different in kind: not one community's
+ * money and roster, but the power to create communities and appoint the
+ * people who run them.
+ *
+ * It says nothing about what is behind it to somebody who has no business
+ * there. A page that announces "platform administration" to every visitor is
+ * an invitation to go looking.
+ */
+export async function PlatformGate({
+  next,
+  children,
+}: {
+  next: string;
+  children: React.ReactNode;
+}) {
+  const account = await currentAccount();
+  if (isPlatformAdmin(account)) return <>{children}</>;
+
+  if (account) {
+    return (
+      <GateShell
+        eyebrow="Not available"
+        title="Nothing here for you"
+        blurb={`You're signed in as ${account.name}. This screen isn't part of your account.`}
+      >
+        <Link href="/" className="btn btn-ghost mt-4 w-full">
+          Back to your communities
+        </Link>
+      </GateShell>
+    );
+  }
+
+  return (
+    <GateShell
+      eyebrow="Sign in"
+      title="Sign in to continue"
+      blurb="This screen needs an account."
     >
       <Link
         href={`/signin?next=${encodeURIComponent(next)}`}

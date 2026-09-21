@@ -18,6 +18,7 @@ import { joinPolicyOf } from "@/lib/join-policy";
 import { validCoords } from "@/lib/geocode";
 import { grantStaff, revokeStaff, setCurrentUserId, clearCurrentUser } from "@/lib/identity";
 import { DEFAULT_WEIGHTS, BALANCE_BY_TYPE } from "@/lib/queue-engine";
+import { setActiveCommunity } from "@/lib/tenant";
 
 type Result = { ok: boolean; message?: string; id?: string };
 
@@ -188,6 +189,8 @@ export async function registerPlayer(
   // app to know who they are, so the waiting screen is theirs rather than a
   // generic one, and so approval does not make them introduce themselves again.
   await setCurrentUserId(userId);
+  // Whatever community they came in through is the one they want to see next.
+  await setActiveCommunity(groupId);
   touch();
 
   if (pending)

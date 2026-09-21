@@ -1,6 +1,7 @@
 import { Avatar } from "@/components/Avatar";
+import { activeCommunity } from "@/lib/tenant";
 import { SubmitButton } from "@/components/SubmitButton";
-import { getGroup, listJoinRequests, listRoster } from "@/server/queries";
+import { listInvites, listJoinRequests, listRoster } from "@/server/queries";
 import {
   addMemberAction, decideJoinAction, memberActiveAction, memberRoleAction,
   setJoinPolicyAction, updateGroupAction,
@@ -8,16 +9,26 @@ import {
 import { joinPolicyOf } from "@/lib/join-policy";
 import { prettyDateTime } from "@/lib/format";
 import { ratingBand } from "@/lib/fairness";
+import { InvitePanel } from "@/components/InvitePanel";
+import { AppointOrganizerForm } from "@/components/AppointOrganizerForm";
+import { requestOrigin } from "@/lib/origin";
+import {
+  communityProfileAction, revokeInviteAction, rotateInviteCodeAction,
+} from "@/server/community-actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function MembersPage() {
-  const group = await getGroup();
-  if (!group) return null;
-  const [members, requests] = await Promise.all([
+  const active = await activeCommunity();
+  if (!active) return null;
+  const group = active.group;
+  const [members, requests, invites, origin] = await Promise.all([
     listRoster(group.id),
     listJoinRequests(group.id),
+    listInvites(group.id),
+    requestOrigin(),
   ]);
+  const openInvites = invites.filter((i) => !i.revokedAt && i.expiresAt.getTime() > Date.now());
 
   const policy = joinPolicyOf(group.settings);
   const policies = [
@@ -29,7 +40,7 @@ export default async function MembersPage() {
   return (
     <div className="space-y-4">
       <section className="card p-4">
-        <h2 className="label">Group</h2>
+        <h2 className="label">Community</h2>
         <form action={updateGroupAction} className="mt-3 grid gap-2 sm:grid-cols-4">
           <input type="hidden" name="groupId" value={group.id} />
           <label className="block sm:col-span-2">
@@ -96,6 +107,79 @@ export default async function MembersPage() {
           </ul>
         </section>
       )}
+
+      <section className="card p-4">
+        <h2 className="label">Invite people</h2>
+        <div className="mt-3">
+          <InvitePanel groupId={group.id} inviteCode={group.inviteCode} origin={origin} />
+        </div>
+        <form action={rotateInviteCodeAction} className="mt-3">
+          <input type="hidden" name="groupId" value={group.id} />
+          <SubmitButton className="btn btn-ghost btn-sm">Replace the shareable code</SubmitButton>
+        </form>
+
+        {openInvites.length > 0 && (
+          <div className="mt-4 border-t border-line pt-4">
+            <p className="label">Not accepted yet ({openInvites.length})</p>
+            <ul className="mt-2 divide-y divide-line/60">
+              {openInvites.map((inv) => (
+                <li key={inv.id} className="flex flex-wrap items-center gap-2 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm">
+                      {inv.name ?? inv.email ?? "Link without a name"}
+                      {inv.role !== "player" && (
+                        <span className="chip ml-2">{inv.role}</span>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {inv.email && inv.name ? `${inv.email} · ` : ""}sent{" "}
+                      {prettyDateTime(inv.createdAt)} · expires {prettyDateTime(inv.expiresAt)}
+                    </p>
+                  </div>
+                  <form action={revokeInviteAction}>
+                    <input type="hidden" name="groupId" value={group.id} />
+                    <input type="hidden" name="inviteId" value={inv.id} />
+                    <SubmitButton className="btn btn-ghost btn-sm">Withdraw</SubmitButton>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+
+      <section className="card p-4">
+        <h2 className="label">Who can find this community</h2>
+        <form action={communityProfileAction} className="mt-3 space-y-3">
+          <input type="hidden" name="groupId" value={group.id} />
+          <select className="input" name="visibility" defaultValue={group.visibility}>
+            <option value="private">Private — only people with your link or code</option>
+            <option value="public">Public — listed in the community directory</option>
+          </select>
+          <textarea
+            className="input min-h-16 resize-y"
+            name="description"
+            maxLength={500}
+            defaultValue={group.description ?? ""}
+            placeholder="A line or two for newcomers: who plays, what standard, when."
+            aria-label="Description"
+          />
+          <SubmitButton className="btn btn-primary btn-sm">Save</SubmitButton>
+        </form>
+        <p className="mt-2 text-xs text-muted">
+          Either way, only members see sessions, the roster and payments. Public just means
+          strangers can find you and ask to join.
+        </p>
+      </section>
+
+      <section className="card p-4">
+        <h2 className="label">Co-organizers</h2>
+        <p className="mb-2 mt-1 text-xs text-muted">
+          Somebody to run things when you&apos;re away. They sign in with their email. If they
+          already play here their account attaches to their existing record.
+        </p>
+        <AppointOrganizerForm groupId={group.id} />
+      </section>
 
       <section className="card p-4">
         <h2 className="label">How people join</h2>

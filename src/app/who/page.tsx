@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { NewPlayerForm } from "@/components/NewPlayerForm";
 import { joinPolicyOf } from "@/lib/join-policy";
 import { SubmitButton } from "@/components/SubmitButton";
-import { getGroup, listMembers } from "@/server/queries";
+import { listMembers } from "@/server/queries";
+import { activeCommunity } from "@/lib/tenant";
 import { identityAction } from "@/server/form-actions";
 import { currentUserId } from "@/lib/identity";
 import { ratingBand } from "@/lib/fairness";
@@ -16,8 +18,9 @@ export default async function WhoPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const { next } = await searchParams;
-  const group = await getGroup();
-  if (!group) return <p className="card p-4 text-muted">No group yet.</p>;
+  const active = await activeCommunity();
+  if (!active) redirect("/communities");
+  const group = active.group;
 
   const [members, userId] = await Promise.all([listMembers(group.id), currentUserId()]);
   const policy = joinPolicyOf(group.settings);

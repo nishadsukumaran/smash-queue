@@ -4,9 +4,9 @@ import { openDb } from "./raw";
 import {
   bookings, checkIns, groupMembers, groups, matchPlayers, matchScores, matches,
   notifications, overrides, payments, preferences, sessionCosts, sessions, users, venues,
-  authEmails, authSessions, authTokens, announcements, announcementReads,
+  authEmails, authSessions, authTokens, announcements, announcementReads, groupInvites,
 } from "./schema";
-import { newId } from "@/lib/ids";
+import { newId, inviteCode } from "@/lib/ids";
 import { colorFor } from "@/lib/format";
 import { simulateSession, type SimPlayer } from "@/lib/sim";
 import { updateRatings } from "@/lib/fairness";
@@ -51,7 +51,7 @@ async function wipe() {
     // Announcement reads reference announcements, announcements reference
     // sessions. Anything added here later has to go above what it points at,
     // or the delete fails on the foreign key rather than cascading.
-    announcementReads, announcements,
+    groupInvites, announcementReads, announcements,
     authSessions, authEmails, authTokens,
     notifications, overrides, preferences, sessionCosts, payments,
     matchScores, matchPlayers, matches, checkIns, bookings,
@@ -85,7 +85,11 @@ async function main() {
   // The demo organizer needs an email, or nothing can sign in to /admin.
   // Overridable so a real clone can point it at a real inbox.
   const ownerEmail = (process.env.OWNER_EMAIL || "organizer@example.com").toLowerCase();
-  await db.update(users).set({ email: ownerEmail }).where(eq(users.id, owner.id));
+  // The demo owner runs the platform too, so /hq is reachable on a fresh seed.
+  await db
+    .update(users)
+    .set({ email: ownerEmail, platformAdmin: true })
+    .where(eq(users.id, owner.id));
   await db.insert(authEmails).values({
     id: newId("aem"),
     userId: owner.id,
@@ -98,6 +102,10 @@ async function main() {
     .values({
       id: groupId,
       name: "Abu Dhabi Smashers",
+      slug: "abu-dhabi-smashers",
+      inviteCode: inviteCode(),
+      visibility: "public",
+      description: "Doubles most weeknights and Saturdays. All standards welcome.",
       ownerId: owner.id,
       location: "Abu Dhabi, UAE",
       defaultFee: 40,

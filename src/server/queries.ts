@@ -3,9 +3,9 @@ import { and, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm
 import { db } from "@/db";
 import {
   announcementReads, announcements,
-  bookings, checkIns, groupMembers, groups, matchPlayers, matchScores, matches,
+  bookings, checkIns, groupInvites, groupMembers, groups, matchPlayers, matchScores, matches,
   overrides, payments, preferences, sessionCosts, sessions, users, venues,
-  type Availability, type BookingStatus, type PaymentStatus,
+  type Availability, type BookingStatus, type Group, type PaymentStatus,
 } from "@/db/schema";
 import {
   NO_CONSTRAINTS, estimateQueuePosition, rankPool, recommendMatch,
@@ -15,10 +15,26 @@ import { fairnessScore } from "@/lib/fairness";
 
 /* ----------------------------------------------------------------- basics */
 
-export async function getGroup(groupId?: string) {
-  const rows = groupId
-    ? await db.select().from(groups).where(eq(groups.id, groupId))
-    : await db.select().from(groups).limit(1);
+/**
+ * One community by id.
+ *
+ * This used to fall back to "the first row of groups" when called with no
+ * argument, which was fine while there was exactly one community and a data
+ * leak the day there were two. The argument is required now; screens get
+ * their id from lib/tenant.
+ */
+export async function getGroup(groupId: string) {
+  const rows = await db.select().from(groups).where(eq(groups.id, groupId));
+  return rows[0] ?? null;
+}
+
+export async function getGroupBySlug(slug: string) {
+  const rows = await db.select().from(groups).where(eq(groups.slug, slug.toLowerCase()));
+  return rows[0] ?? null;
+}
+
+export async function getGroupByInviteCode(code: string) {
+  const rows = await db.select().from(groups).where(eq(groups.inviteCode, code.toUpperCase()));
   return rows[0] ?? null;
 }
 
@@ -654,4 +670,141 @@ export async function unreadAnnouncementCount(groupId: string, viewerId: string 
   if (!viewerId) return 0;
   const rows = await listAnnouncements(groupId, { viewerId, limit: 50 });
   return rows.filter((r) => r.unread).length;
+}
+
+/* ----------------------------------------------------------- communities */
+
+export type CommunityCard = {
+  group: Group;
+  members: number;
+  pending: number;
+  sessions: number;
+  organizers: Array<{ id: string; name: string; email: string | null }>;
+};
+
+/**
+ * Every community with the four numbers the platform console needs to tell
+ * a thriving one from an abandoned one at a glance.
+ *
+ * Four queries stitched in JavaScript rather than one clever join. Over the
+ * HTTP driver each round trip costs the same whatever it returns, and four
+ * readable ones beat a single query nobody will dare change later.
+ */
+export async function listCommunities(): Promise<CommunityCard[]> {
+  const [all, memberCounts, sessionCounts, organizerRows] = await Promise.all([
+    db.select().from(groups).orderBy(groups.name),
+    db
+      .select({
+        groupId: groupMembers.groupId,
+        status: groupMembers.status,
+        n: sql<number>`count(*)::int`,
+      })
+      .from(groupMembers)
+      .groupBy(groupMembers.groupId, groupMembers.status),
+    db
+      .select({ groupId: sessions.groupId, n: sql<number>`count(*)::int` })
+      .from(sessions)
+      .groupBy(sessions.groupId),
+    db
+      .select({ groupId: groupMembers.groupId, user: users })
+      .from(groupMembers)
+      .innerJoin(users, eq(users.id, groupMembers.userId))
+      .where(and(eq(groupMembers.role, "organizer"), eq(groupMembers.status, "active")))
+      .orderBy(users.name),
+  ]);
+
+  const active = new Map<string, number>();
+  const pending = new Map<string, number>();
+  for (const row of memberCounts) {
+    if (row.status === "active") active.set(row.groupId, row.n);
+    if (row.status === "pending") pending.set(row.groupId, row.n);
+  }
+  const held = new Map(sessionCounts.map((r) => [r.groupId, r.n]));
+  const organizers = new Map<string, CommunityCard["organizers"]>();
+  for (const row of organizerRows) {
+    const list = organizers.get(row.groupId) ?? [];
+    list.push({ id: row.user.id, name: row.user.name, email: row.user.email });
+    organizers.set(row.groupId, list);
+  }
+
+  return all.map((group) => ({
+    group,
+    members: active.get(group.id) ?? 0,
+    pending: pending.get(group.id) ?? 0,
+    sessions: held.get(group.id) ?? 0,
+    organizers: organizers.get(group.id) ?? [],
+  }));
+}
+
+/**
+ * The public directory: communities that chose to be findable.
+ *
+ * Deliberately returns no sessions, no rosters and no fees — only what a
+ * stranger needs to decide whether to knock. Membership is what opens the
+ * rest, and a directory that leaked tonight's attendance would make the
+ * membership gate decorative.
+ */
+export async function listPublicCommunities() {
+  const [all, counts] = await Promise.all([
+    db
+      .select()
+      .from(groups)
+      .where(and(eq(groups.visibility, "public"), isNull(groups.archivedAt)))
+      .orderBy(groups.name),
+    db
+      .select({ groupId: groupMembers.groupId, n: sql<number>`count(*)::int` })
+      .from(groupMembers)
+      .where(eq(groupMembers.status, "active"))
+      .groupBy(groupMembers.groupId),
+  ]);
+  const members = new Map(counts.map((c) => [c.groupId, c.n]));
+  return all.map((group) => ({ group, members: members.get(group.id) ?? 0 }));
+}
+
+/** Who runs this community, for the "ask them" line a newcomer sees. */
+export async function listOrganizers(groupId: string) {
+  return db
+    .select({ membership: groupMembers, user: users })
+    .from(groupMembers)
+    .innerJoin(users, eq(users.id, groupMembers.userId))
+    .where(
+      and(
+        eq(groupMembers.groupId, groupId),
+        eq(groupMembers.status, "active"),
+        inArray(groupMembers.role, ["organizer", "coordinator"]),
+      ),
+    )
+    .orderBy(desc(groupMembers.role), users.name);
+}
+
+/** Invitations sent but not yet used, newest first. */
+export async function listInvites(groupId: string) {
+  return db
+    .select()
+    .from(groupInvites)
+    .where(and(eq(groupInvites.groupId, groupId), isNull(groupInvites.acceptedAt)))
+    .orderBy(desc(groupInvites.createdAt))
+    .limit(50);
+}
+
+/** How busy a community looks from outside: enough to decide whether to join. */
+export async function communitySummary(groupId: string) {
+  const [members, upcoming, venueRows] = await Promise.all([
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(groupMembers)
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.status, "active"))),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(sessions)
+      .where(
+        and(eq(sessions.groupId, groupId), inArray(sessions.status, ["scheduled", "live"])),
+      ),
+    db.select({ name: venues.name }).from(venues).where(eq(venues.groupId, groupId)).limit(4),
+  ]);
+  return {
+    members: members[0]?.n ?? 0,
+    upcoming: upcoming[0]?.n ?? 0,
+    venues: venueRows.map((v) => v.name),
+  };
 }

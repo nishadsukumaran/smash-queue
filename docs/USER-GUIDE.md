@@ -15,6 +15,7 @@ screen and stops being the person everybody asks "when am I playing?"
 
 1. [The five-minute version](#1-the-five-minute-version)
 2. [For players](#2-for-players)
+   - [Joining a community](#joining-a-community)
 3. [For the coordinator](#3-for-the-coordinator)
 4. [For the organizer](#4-for-the-organizer)
 5. [How the queue decides](#5-how-the-queue-decides)
@@ -46,6 +47,35 @@ score, who still owes money.
 ---
 
 ## 2. For players
+
+### Joining a community
+
+Everything in Smash Queue belongs to a **community** — one badminton crowd with its own
+venues, sessions, members and money. You only see the sessions of communities you have
+joined. Open the app without belonging to any and it takes you to **Communities**, the
+directory.
+
+There are three ways in:
+
+| You have… | What to do |
+| :--- | :--- |
+| A **personal invitation** from the organizer (email or a link starting `/i/`) | Open it and tap **Accept**. You are in immediately — the organizer already said yes by inviting you. Works once, for two weeks. |
+| The community's **share link** (`/join/XXXXXXXX`) or its **eight-character code** | Open the link, or type the code in **Got a code?** on the Communities page. What happens next depends on the community: straight in, or a request the organizer approves. |
+| Nothing, but the community is **public** | Find it in the directory, open it, tap **Join** or **Ask to join**. |
+
+If the community approves new members by hand you'll see **Request sent**. Nothing more to
+do: your phone remembers you, and once the organizer lets you in the sessions simply appear
+on your home screen.
+
+Some communities are **invitation only**. They don't take requests; ask the organizer for a
+link.
+
+Belong to more than one? A row of community names appears at the top of the home screen.
+Tap one to switch.
+
+A session link from a community you haven't joined shows the date and venue, and a join
+button — but not who's booked or the scores. The QR code at the door still works for
+newcomers; it has its own join box.
 
 ### First time with the group
 
@@ -256,6 +286,30 @@ Roles: **Player**, **Coordinator**, **Organizer**, and they now decide real thin
 Anyone with the PIN can still run tonight's session. Nobody reaches the organizer screens
 without an account, whatever the PIN is.
 
+### Inviting people
+
+**Organizer → Members → Invite people** has both kinds of invitation.
+
+- **Share a link.** One link for the WhatsApp group. Whoever opens it joins the way your
+  *How people join* setting says — straight in (Open), or waiting for you (Approval). If
+  the link ends up somewhere it shouldn't, tap **Replace the shareable code** and every
+  copy of the old one stops working.
+- **Invite one person.** Name, email (optional) and role. They skip the approval queue,
+  because you named them. With an email address they get the invitation by mail; without
+  one you get a link to send yourself. Each is single-use and lasts two weeks. Unused ones
+  are listed underneath, with **Withdraw**.
+
+**Who can find this community** sets whether it appears in the public directory. Private
+communities are reachable only by link or code. Either way, only members ever see sessions,
+the roster, scores or payments.
+
+### Co-organizers
+
+**Organizer → Members → Co-organizers** appoints someone to run the community with you. They
+need an email address — it's how they sign in. If they already play in the community, the
+account attaches to their existing record, so their rating and history stay in one piece.
+The app won't let the last organizer step down; appoint the next one first.
+
 ### Giving somebody an account
 
 Add them as a member with their email, set the role, and they can sign themselves in — no
@@ -287,6 +341,24 @@ chats — and treat it as tonight's door code rather than a password.
 What it costs you if it does leak is bounded now: the PIN reaches the court board,
 check-in and payments for a session, and nothing that spans sessions. Your member list,
 fees, venues and the leaderboard need an account.
+
+---
+
+## 4a. For the platform admin
+
+The platform admin decides which communities exist and who runs them. That's all.
+Everything inside a community — venues, sessions, fees, members — belongs to its organizers.
+
+Open **Platform** from the home screen (or go to `/hq`). From there:
+
+- **Start a community**: its name, where it plays, whether it's public, how people join,
+  and — in the same step — the organizer who will run it. The organizer gets an account at
+  once and signs in with a code sent to that address.
+- **Manage** a community: appoint or remove organizers, change visibility, replace its
+  invite code, or **Archive** it. Archiving hides it from members and the directory without
+  deleting anything, and **Restore** brings it back.
+- **Open** a community to see it exactly as its organizer does — useful when an organizer is
+  away and something needs fixing.
 
 ---
 

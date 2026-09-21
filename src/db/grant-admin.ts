@@ -10,6 +10,10 @@ import { newId } from "@/lib/ids";
  *
  *   npm run db:grant-admin -- "Nishad Sukumaran" nishad.me@gmail.com
  *   npm run db:grant-admin -- "Nishad Sukumaran" ns@aiops.ae
+ *   npm run db:grant-admin -- "Nishad Sukumaran" nishad.me@gmail.com platform
+ *
+ * The third argument "platform" makes them a platform admin (creates
+ * communities, appoints organizers) without touching any community roles.
  *
  * It attaches addresses to an existing person on purpose. Creating a second
  * user row for the same human is the one mistake that quietly breaks
@@ -22,7 +26,8 @@ async function main() {
 
   const [name, rawEmail, roleArg] = process.argv.slice(2);
   const email = (rawEmail ?? "").trim().toLowerCase();
-  const role = (roleArg ?? "organizer") as "organizer" | "coordinator";
+  const platform = roleArg === "platform";
+  const role = (platform ? "organizer" : roleArg ?? "organizer") as "organizer" | "coordinator";
 
   if (!name || !email) {
     console.error('Usage: npm run db:grant-admin -- "Full Name" email@example.com [organizer|coordinator]');
@@ -65,8 +70,29 @@ async function main() {
     console.log(`Set ${email} as the contact address.`);
   }
 
-  // Staff rights are per group, so grant them everywhere this person is a member.
-  const all = await db.select().from(groups);
+  if (platform) {
+    await db.update(users).set({ platformAdmin: true }).where(eq(users.id, user.id));
+    console.log(`${user.name} is now a platform admin. They manage communities at /hq.`);
+    return;
+  }
+
+  // Staff rights are per community. With one community on the deployment this
+  // is unambiguous; with several, granting "everywhere" would hand a new
+  // organizer every community's roster and money, so a slug is required.
+  const slugArg = process.argv[5];
+  const every = await db.select().from(groups);
+  const all = slugArg ? every.filter((g) => g.slug === slugArg) : every;
+  if (!slugArg && every.length > 1) {
+    console.error(
+      `There are ${every.length} communities. Name one: npm run db:grant-admin -- "${name}" ${email} ${role} <slug>` +
+        `\nSlugs: ${every.map((g) => g.slug).join(", ")}`,
+    );
+    process.exit(1);
+  }
+  if (slugArg && all.length === 0) {
+    console.error(`No community with slug "${slugArg}".`);
+    process.exit(1);
+  }
   for (const group of all) {
     const [member] = await db
       .select()

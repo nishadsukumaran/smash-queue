@@ -2,7 +2,8 @@ import "./env";
 import { eq } from "drizzle-orm";
 import { openDb } from "./raw";
 import { authEmails, groupMembers, groups, users, venues } from "./schema";
-import { newId } from "@/lib/ids";
+import { inviteCode, newId } from "@/lib/ids";
+import { slugify } from "@/lib/slug";
 import { colorFor } from "@/lib/format";
 import { DEFAULT_WEIGHTS, BALANCE_BY_TYPE } from "@/lib/queue-engine";
 
@@ -42,9 +43,11 @@ async function main() {
     process.exit(1);
   }
 
+  // Bootstrap makes the first community only. Every one after that is
+  // created from /hq, so running this twice must not make a second.
   const existing = await db.select().from(groups).limit(1);
   if (existing.length) {
-    console.log(`Group "${existing[0].name}" already exists. Nothing to do.`);
+    console.log(`A community already exists ("${existing[0].name}"). Create more at /hq.`);
     return;
   }
 
@@ -56,6 +59,9 @@ async function main() {
     email: ownerEmail,
     avatarColor: colorFor(ownerName),
     rating: 1200,
+    // Whoever bootstraps the deployment runs the platform. Somebody has to be
+    // able to reach /hq to create the second community.
+    platformAdmin: true,
     createdAt: now,
   });
 
@@ -70,6 +76,8 @@ async function main() {
   await db.insert(groups).values({
     id: groupId,
     name: groupName,
+    slug: slugify(groupName),
+    inviteCode: inviteCode(),
     ownerId,
     location,
     defaultFee: fee,
