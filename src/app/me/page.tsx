@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
 import { RequestRoleForm, SetPinForm } from "@/components/AccountForms";
+import { PushToggle } from "@/components/PushToggle";
 import {
   getPlayerStats, myCommunityRecords, myCommunityRequests, myDeletedCommunities, myInvites,
   myRoleRequests,
@@ -261,6 +262,13 @@ export default async function MePage() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="card p-4">
+        <h2 className="label">Notifications</h2>
+        <div className="mt-2">
+          <PushToggle />
+        </div>
       </section>
 
       <section className="card p-4">

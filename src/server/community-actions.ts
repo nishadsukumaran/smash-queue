@@ -22,7 +22,7 @@
  */
 
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
@@ -40,6 +40,7 @@ import { setActiveCommunity } from "@/lib/tenant";
 import { requestOrigin } from "@/lib/origin";
 import { sendInvite } from "@/lib/mail";
 import { DEFAULT_WEIGHTS, BALANCE_BY_TYPE } from "@/lib/queue-engine";
+import { pushLater } from "@/lib/push";
 import type { CommunityFormState, InviteView, JoinFormState } from "./community-types";
 
 type Result = { ok: boolean; message?: string; id?: string };
@@ -235,6 +236,13 @@ export async function decideCommunityRequest(
     })
     .where(eq(communityRequests.id, requestId));
 
+  pushLater([req.requesterId], {
+    title: "Your community is approved",
+    body: `${req.name} is yours. Set up your first venue and session.`,
+    url: "/admin",
+    tag: `creq-${requestId}`,
+  });
+
   touch();
   return { ok: true, id: groupId, slug };
 }
@@ -384,6 +392,22 @@ export async function restoreCommunity(groupId: string): Promise<Result> {
   return { ok: true };
 }
 
+/**
+ * Turns the shared coordinator PIN on or off. Off revokes every phone that
+ * was unlocked with it; from then on the court is run by named accounts.
+ */
+export async function setSharedPin(groupId: string, enabled: boolean): Promise<Result> {
+  if (!canOwn(await currentAccount(), groupId)) return { ok: false, message: "Only an owner can change that." };
+  const group = await liveGroup(groupId);
+  if (!group) return { ok: false, message: "Community not found" };
+  await db
+    .update(groups)
+    .set({ settings: { ...group.settings, pinDisabled: !enabled } })
+    .where(eq(groups.id, groupId));
+  touch();
+  return { ok: true };
+}
+
 /* ------------------------------------------------------- the day to day */
 
 /**
@@ -469,6 +493,12 @@ export async function createInvite(
       expiresAt: new Date(Date.now() + INVITE_TTL_MS),
       createdAt: new Date(),
     });
+    pushLater([targetId], {
+      title: "You're invited",
+      body: `${account!.name} invited you to ${group.name}.`,
+      url: "/me",
+      tag: `invite-${groupId}`,
+    });
     touch();
     return neutral;
   }
@@ -545,6 +575,16 @@ export async function requestRole(groupId: string, role: MemberRole, note?: stri
     status: "pending",
     createdAt: new Date(),
   });
+  const owners = await db
+    .select({ userId: groupMembers.userId })
+    .from(groupMembers)
+    .where(
+      and(eq(groupMembers.groupId, groupId), eq(groupMembers.role, "owner"), eq(groupMembers.status, "active")),
+    );
+  pushLater(
+    owners.map((o) => o.userId),
+    { title: "Someone wants to help", body: `${account.name} asked to be ${role === "organizer" ? "an organizer" : "a coordinator"}.`, url: "/admin/members", tag: `rreq-${groupId}` },
+  );
   touch();
   return { ok: true };
 }
@@ -754,6 +794,23 @@ export async function joinCommunity(groupId: string, note?: string): Promise<Joi
   if (!placed.ok) return placed;
 
   await setActiveCommunity(groupId);
+
+  if (policy === "approval" && placed.message !== "already" && placed.message !== "waiting") {
+    const runners = await db
+      .select({ userId: groupMembers.userId })
+      .from(groupMembers)
+      .where(
+        and(
+          eq(groupMembers.groupId, groupId),
+          eq(groupMembers.status, "active"),
+          inArray(groupMembers.role, ["owner", "organizer"]),
+        ),
+      );
+    pushLater(
+      runners.map((r) => r.userId),
+      { title: "New join request", body: `${account.name} asked to join ${group.name}.`, url: "/admin/members", tag: `join-${groupId}` },
+    );
+  }
   touch();
 
   const status =
@@ -825,6 +882,10 @@ export async function suspendCommunityAction(fd: FormData) {
 
 export async function acceptOwnershipAction(fd: FormData) {
   await acceptOwnership(str(fd, "groupId"));
+}
+
+export async function sharedPinAction(fd: FormData) {
+  await setSharedPin(str(fd, "groupId"), str(fd, "enabled") === "1");
 }
 
 export async function communityProfileAction(fd: FormData) {

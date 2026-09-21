@@ -187,7 +187,9 @@ wifi, is you running the night on paper.
 link. Either signs you in; both expire in fifteen minutes and work once. Worth doing if
 you help out regularly, because it survives a PIN change.
 
-Whichever you use, the screens are the same.
+Whichever you use, the screens are the same. If the board asks you to sign in and offers
+no PIN box, the owner has switched the shared PIN off for this community: sign in with
+your own account, and ask them for the coordinator role if you don't have it yet.
 
 ### Before the first game
 
@@ -344,7 +346,20 @@ chats — and treat it as tonight's door code rather than a password.
 
 What it costs you if it does leak is bounded now: the PIN reaches the court board,
 check-in and payments for a session, and nothing that spans sessions. Your member list,
-fees, venues and the leaderboard need an account.
+fees, venues and the leaderboard need an account. Ten wrong guesses in an hour lock the
+PIN for everyone until the hour is up, so it can't be guessed at the door.
+
+**Switching it off.** Owners can turn the shared PIN off entirely under **Members → Shared
+coordinator PIN**. Every phone that unlocked with it loses the board straight away, and
+your coordinators sign in with their own accounts. Switch it back on whenever you like.
+
+### Notifications
+
+**Me → Notifications → Turn on notifications.** After that your phone buzzes when you're
+put on court, when a waitlist spot opens for you, when your community posts a notice or
+invites you, and on the day of a session you booked. On iPhone, add Smash Queue to your
+home screen first (Safari → Share → Add to Home Screen) and turn it on from there;
+Apple doesn't allow it from a normal Safari tab. **Send a test** checks it works.
 
 ---
 
@@ -532,6 +547,8 @@ by design. Somebody who still has organizer access can add or correct your email
 | Unlock the court board | Session PIN, or sign in with email |
 | Sign in as staff | Session link → Sign in with email |
 | Change the session PIN | Organizer → Members → Group |
+| Switch the shared PIN off | Organizer → Members → Shared coordinator PIN (owner) |
+| Turn on notifications | Me → Notifications |
 | Create a session | Organizer → New session |
 | Add a member | Organizer → Members |
 | See the leaderboard | Organizer → Statistics |

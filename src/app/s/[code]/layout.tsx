@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSessionByCode, getVenue } from "@/server/queries";
 import { isStaffFor } from "@/lib/identity";
+import { canStaff, currentAccount } from "@/lib/auth";
 import { money, prettyDate, prettyTime } from "@/lib/format";
 import { directionsUrl, validCoords } from "@/lib/geocode";
 
@@ -16,7 +17,14 @@ export default async function SessionLayout({
   const session = await getSessionByCode(code);
   if (!session) notFound();
 
-  const [venue, staff] = await Promise.all([getVenue(session.venueId), isStaffFor(session.groupId)]);
+  const [venue, pinStaff, account] = await Promise.all([
+    getVenue(session.venueId),
+    isStaffFor(session.groupId),
+    currentAccount(),
+  ]);
+  // Coordinators with accounts see the court tabs too, not only PIN holders —
+  // which matters once an owner switches the shared PIN off.
+  const staff = pinStaff || canStaff(account, session.groupId);
   const venueCoords = venue ? validCoords(venue.latitude, venue.longitude) : null;
 
   const tabs = [

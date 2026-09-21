@@ -8,7 +8,8 @@ import { StaffGate } from "@/components/StaffGate";
 import { CourtAssigner } from "@/components/CourtAssigner";
 import { FinishGame } from "@/components/FinishGame";
 import { CountUp } from "@/components/motion/CountUp";
-import { WinBurst, lastFinished } from "@/components/motion/WinBurst";
+import { WinBurst } from "@/components/motion/WinBurst";
+import { lastFinished } from "@/components/motion/last-finished";
 import { Shuttle } from "@/components/Shuttle";
 import { getBoard, getSessionByCode } from "@/server/queries";
 import {

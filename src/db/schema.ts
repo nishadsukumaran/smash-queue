@@ -158,6 +158,14 @@ export type GroupSettings = {
    * nothing behind it gives nobody a reason to press it.
    */
   previewSchedule?: boolean;
+  /**
+   * The owner can switch off the shared coordinator PIN once everyone who runs
+   * the court has an account. Off means every court action is attributed to a
+   * named person instead of "whoever had the PIN".
+   */
+  pinDisabled?: boolean;
+  /** Wrong coordinator-PIN guesses in the current window, for the lockout. */
+  pinFailures?: { count: number; since: string };
 };
 
 export type JoinPolicy = "open" | "approval" | "closed";
@@ -636,6 +644,35 @@ export const trustedDevices = pgTable(
   (t) => [
     uniqueIndex("device_token_idx").on(t.tokenHash),
     index("device_user_idx").on(t.userId),
+  ],
+);
+
+/* ------------------------------------------------------ push notifications */
+
+/**
+ * One browser that agreed to receive notifications for one person.
+ *
+ * A person can have several (phone, laptop). The endpoint is the push
+ * service's address for that browser; p256dh and auth are the keys the
+ * payload is encrypted with, so the push service itself can't read it.
+ * Subscriptions the push service reports as gone (404/410) are deleted, so
+ * this table only ever holds ones that still work.
+ */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: id(),
+    userId: text("user_id").notNull().references(() => users.id),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: ts("created_at").notNull(),
+    lastSentAt: ts("last_sent_at"),
+  },
+  (t) => [
+    uniqueIndex("push_endpoint_idx").on(t.endpoint),
+    index("push_user_idx").on(t.userId),
   ],
 );
 

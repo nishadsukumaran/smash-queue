@@ -1,5 +1,6 @@
 "use server";
 
+import { timingSafeEqual } from "node:crypto";
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
@@ -20,6 +21,7 @@ import { grantStaff, revokeStaff, setCurrentUserId, clearCurrentUser } from "@/l
 import { DEFAULT_WEIGHTS, BALANCE_BY_TYPE } from "@/lib/queue-engine";
 import { setActiveCommunity } from "@/lib/tenant";
 import { isRegistered } from "@/lib/auth";
+import { pushLater } from "@/lib/push";
 
 type Result = { ok: boolean; message?: string; id?: string };
 
@@ -33,12 +35,26 @@ async function sessionById(sessionId: string) {
   return rows[0] ?? null;
 }
 
+/** Which in-app events also buzz a phone, and what the notification says. */
+const PUSHED: Record<string, (s: { name: string }) => string> = {
+  assigned: () => "You're up",
+  waitlist: (s) => `You're in: ${s.name}`,
+};
+
 async function notify(userIds: string[], sessionId: string, kind: string, body: string) {
   if (userIds.length === 0) return;
   const now = new Date();
   await db.insert(notifications).values(
     userIds.map((userId) => ({ id: newId("ntf"), sessionId, userId, kind, body, createdAt: now })),
   );
+
+  // "Game started" stays in the app: the people it concerns are already on
+  // court, and a buzz in their pocket mid-rally helps nobody.
+  const title = PUSHED[kind];
+  if (!title) return;
+  const s = await sessionById(sessionId);
+  if (!s) return;
+  pushLater(userIds, { title: title(s), body, url: `/s/${s.code}`, tag: `${kind}-${sessionId}` });
 }
 
 /* ------------------------------------------------------------- identity */
@@ -62,12 +78,49 @@ export async function signOutIdentity() {
   return { ok: true };
 }
 
+const PIN_WINDOW_MS = 60 * 60 * 1000;
+const PIN_MAX_FAILS = 10;
+
+/**
+ * The shared coordinator PIN.
+ *
+ * Four to eight digits is guessable by anyone willing to post the form
+ * enough times, so wrong guesses are counted per community: ten in an hour
+ * and the PIN stops being accepted at all until the hour is up. Coordinators
+ * with accounts are unaffected — they never needed the PIN.
+ */
 export async function unlockStaff(groupId: string, pin: string): Promise<Result> {
   const rows = await db.select().from(groups).where(eq(groups.id, groupId));
   const group = rows[0];
-  if (!group) return { ok: false, message: "Group not found" };
-  if ((group.settings?.staffPin ?? "") !== pin.trim())
+  if (!group || group.deletedAt || group.archivedAt) return { ok: false, message: "Group not found" };
+  const settings = group.settings;
+  if (settings?.pinDisabled)
+    return { ok: false, message: "This community signs coordinators in with their accounts now." };
+
+  const now = Date.now();
+  const window = settings?.pinFailures;
+  const inWindow = window && now - Date.parse(window.since) < PIN_WINDOW_MS;
+  const fails = inWindow ? window!.count : 0;
+  if (fails >= PIN_MAX_FAILS)
+    return { ok: false, message: "Too many wrong PINs. Try again in an hour, or sign in with your account." };
+
+  const expected = Buffer.from(settings?.staffPin ?? "");
+  const given = Buffer.from(pin.trim());
+  const match = expected.length > 0 && expected.length === given.length && timingSafeEqual(expected, given);
+
+  if (!match) {
+    await db
+      .update(groups)
+      .set({
+        settings: {
+          ...settings,
+          pinFailures: { count: fails + 1, since: inWindow ? window!.since : new Date(now).toISOString() },
+        },
+      })
+      .where(eq(groups.id, groupId));
     return { ok: false, message: "That PIN is not right" };
+  }
+
   await grantStaff(groupId);
   touch();
   return { ok: true };
@@ -1011,6 +1064,37 @@ export async function postAnnouncement(
     pinned: Boolean(opts.pinned),
     createdAt: new Date(),
   });
+
+  // A notice for one night goes to the people booked on it; a notice for the
+  // whole community goes to its active members. Never to anyone outside it.
+  const [group] = await db.select().from(groups).where(eq(groups.id, groupId));
+  let recipients: string[];
+  let url = "/";
+  if (opts.sessionId) {
+    const s = await sessionById(opts.sessionId);
+    const booked = await db
+      .select({ userId: bookings.userId })
+      .from(bookings)
+      .where(and(eq(bookings.sessionId, opts.sessionId), inArray(bookings.status, ["confirmed", "waitlisted"])));
+    recipients = booked.map((b) => b.userId);
+    if (s) url = `/s/${s.code}`;
+  } else {
+    const members = await db
+      .select({ userId: groupMembers.userId })
+      .from(groupMembers)
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.status, "active")));
+    recipients = members.map((m) => m.userId);
+  }
+  pushLater(
+    recipients.filter((id) => id !== authorId),
+    {
+      title: group?.name ?? "Notice",
+      body: text.length > 140 ? `${text.slice(0, 137)}...` : text,
+      url,
+      tag: `notice-${groupId}`,
+    },
+  );
+
   touch();
   return { ok: true };
 }

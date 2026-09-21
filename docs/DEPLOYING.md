@@ -107,7 +107,21 @@ matches, for local development. **Never point it at production.**
 Set `CRON_SECRET` (any long random string, e.g. `openssl rand -hex 32`) on the project.
 `vercel.json` schedules `/api/cron/purge` daily; Vercel sends the secret with each call, and
 the route erases communities whose owners deleted them more than 30 days ago. Without the
-secret the route refuses every call and nothing is ever purged.
+secret the route refuses every call and nothing is ever purged. The same secret guards
+`/api/cron/reminders`, which at 10:00 UTC (2pm Gulf) pushes a reminder to everyone booked
+into a session that day.
+
+**Push notifications.** Generate a key pair once, on your own machine:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Set `NEXT_PUBLIC_VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (mark it sensitive) in Vercel
+**before** the deploy that should use them: the public key is baked into the build. Keep the
+pair for good; a new pair quietly breaks every phone that already subscribed, and each would
+have to turn notifications off and on again. On iPhone, web push only works for the app
+added to the home screen (iOS 16.4 or later), and the Notifications switch says so.
 
 
 Import the GitHub repo and set these environment variables:

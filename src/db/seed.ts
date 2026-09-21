@@ -5,7 +5,7 @@ import {
   bookings, checkIns, groupMembers, groups, matchPlayers, matchScores, matches,
   notifications, overrides, payments, preferences, sessionCosts, sessions, users, venues,
   authEmails, authSessions, authTokens, announcements, announcementReads, groupInvites,
-  trustedDevices, roleRequests, communityRequests,
+  trustedDevices, roleRequests, communityRequests, pushSubscriptions,
 } from "./schema";
 import { newId, inviteCode } from "@/lib/ids";
 import { colorFor } from "@/lib/format";
@@ -52,7 +52,7 @@ async function wipe() {
     // Announcement reads reference announcements, announcements reference
     // sessions. Anything added here later has to go above what it points at,
     // or the delete fails on the foreign key rather than cascading.
-    trustedDevices, roleRequests, communityRequests,
+    pushSubscriptions, trustedDevices, roleRequests, communityRequests,
     groupInvites, announcementReads, announcements,
     authSessions, authEmails, authTokens,
     notifications, overrides, preferences, sessionCosts, payments,

@@ -314,8 +314,11 @@ Everything in PRD §31 (MVP scope):
 | **Schema** | Committed migrations, with baselining for databases built before them |
 | **Delivery** | Installable PWA, no external CDN or font dependencies |
 
-> **Deliberately Phase 2:** push / WhatsApp notifications, online payments, tournament mode,
-> recurring sessions, multiple groups.
+> **Notifications:** phones get a push when they're put on court, when a waitlist spot opens,
+> when their community posts a notice or invites them, and on the morning of a session they booked.
+> Android works in the browser; iPhone needs the app added to the home screen first.
+>
+> **Deliberately Phase 2:** WhatsApp, online payments, tournament mode, recurring sessions.
 
 ---
 
@@ -455,7 +458,10 @@ phone with one bar of signal in a sports hall.
 | `RESEND_API_KEY` | none | Sends sign-in codes. Without it, dev prints them; production says so rather than pretending |
 | `MAIL_FROM` | Resend sandbox | `Smash Queue <noreply@yourdomain>`, on a domain Resend has verified |
 | `OWNER_EMAIL` | — | `db:bootstrap` only. How the first organizer signs in, so it is required there |
-| `CRON_SECRET` | none | Lets Vercel's scheduler run the daily purge of deleted communities. Without it the purge never runs |
+| `CRON_SECRET` | none | Lets Vercel's scheduler run the daily purge of deleted communities and the morning session reminders. Without it neither runs |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | none | Push notifications. Pair with `VAPID_PRIVATE_KEY`; generate both once with `npx web-push generate-vapid-keys`. Without them the Notifications switch says they're off for this deployment |
+| `VAPID_PRIVATE_KEY` | none | Secret half of the pair. Changing the pair silently orphans every phone's subscription, so set it once |
+| `VAPID_SUBJECT` | `mailto:hello@aiops.ae` | Contact the push services use if something goes wrong |
 | `PLATFORM_ADMINS` | none | Comma-separated sign-in addresses promoted to platform admin on their next sign-in. Written through to the database, so it can be removed afterwards |
 | `APP_BASE_URL` | derived from request | Optional. QR codes normally follow the domain they're served from |
 | `NEXT_PUBLIC_TIME_ZONE` | `Asia/Dubai` | Wall-clock times. A UTC server shows Gulf check-ins four hours early without it |
@@ -479,9 +485,8 @@ them are worth knowing before you deploy this for someone else.
 
 | Known limit | Impact | Plan |
 | :--- | :--- | :--- |
-| Session PIN still opens the court board | A leaked PIN gets a stranger into tonight's board, check-in and payments. It reaches nothing that spans sessions | Kept on purpose — see below |
-| One group per deployment | `getGroup()` takes the first row; `db:bootstrap` refuses a second | Multi-group is next |
-| Live screens poll every 5–6 s | Noticeable if you stare at the board, not while running a session | Push in Phase 2 |
+| Session PIN still opens the court board | A leaked PIN gets a stranger into tonight's board, check-in and payments. It reaches nothing that spans sessions | The owner can switch it off per community; ten wrong guesses in an hour lock it |
+| Live screens poll every 5–6 s | Noticeable if you stare at the board, not while running a session | Push covers the moments that matter; the board itself still polls |
 | Player score confirmation off by default | In the data model, switched off | Enable per group |
 | No interactive transactions over Neon HTTP | Costs nothing today — every write is a single statement | Check before adding a multi-statement atomic write |
 
@@ -490,6 +495,10 @@ alternative at 7pm in a sports hall on one bar of signal is telling a coordinato
 find their email, and a coordinator who cannot start a game runs the night on paper. So the
 PIN survives where speed decides the outcome, and reaches nothing else: members, venues,
 fees, settings and statistics take an account and ignore it entirely.
+
+An owner who would rather not have a PIN at all switches it off under **Members → Shared
+coordinator PIN**. Every phone unlocked with it loses the board on its next load, and
+coordinators sign in with their own accounts instead.
 
 Found something wrong, or want a weight changed? **hello@aiops.ae**
 

@@ -2,6 +2,9 @@ import Link from "next/link";
 import { SubmitButton } from "@/components/SubmitButton";
 import { pinAction } from "@/server/form-actions";
 import { isStaffFor } from "@/lib/identity";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { groups } from "@/db/schema";
 import { currentAccount, canStaff, canOrganize, isPlatformAdmin } from "@/lib/auth";
 import { SUPPORT_EMAIL, supportMailto } from "@/lib/brand";
 
@@ -69,6 +72,30 @@ export async function StaffGate({
   const account = await currentAccount();
   if (canStaff(account, groupId)) return <>{children}</>;
   if (await isStaffFor(groupId)) return <>{children}</>;
+
+  const [group] = await db
+    .select({ settings: groups.settings })
+    .from(groups)
+    .where(eq(groups.id, groupId));
+  if (group?.settings?.pinDisabled) {
+    return (
+      <GateShell
+        eyebrow="Coordinator access"
+        title="Sign in to run the court"
+        blurb={
+          account
+            ? `You're signed in as ${account.name}, but you aren't a coordinator here. Ask the owner.`
+            : "This community runs the court with named accounts, not a shared PIN."
+        }
+      >
+        {!account && (
+          <Link href={`/signin?next=${encodeURIComponent(next)}`} className="btn btn-primary mt-4 w-full">
+            Sign in
+          </Link>
+        )}
+      </GateShell>
+    );
+  }
 
   return (
     <GateShell

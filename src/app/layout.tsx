@@ -15,6 +15,8 @@ export const metadata: Metadata = {
   description:
     "Book. Check in. Queue. Play. Badminton session management that runs itself. Built by AIOps.",
   manifest: "/manifest.webmanifest",
+  // iOS ignores the manifest's icons for the home screen; it wants this.
+  icons: { apple: "/apple-touch-icon.png" },
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Smash Queue" },
 };
 

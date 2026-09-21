@@ -16,7 +16,7 @@ import {
 } from "@/server/form-actions";
 import {
   changeRoleAction, communityProfileAction, decideRoleRequestAction, revokeInviteAction,
-  rotateInviteCodeAction, setMembershipAction,
+  rotateInviteCodeAction, setMembershipAction, sharedPinAction,
 } from "@/server/community-actions";
 import type { MemberRole } from "@/db/schema";
 
@@ -335,6 +335,24 @@ export default async function MembersPage() {
             Whatever you choose, only members see who&apos;s booked, the scores, the roster and the
             money.
           </p>
+        </section>
+      )}
+
+      {isOwner && (
+        <section className="card p-4">
+          <h2 className="label">Shared coordinator PIN</h2>
+          <p className="mt-1 text-xs text-muted">
+            {group.settings?.pinDisabled
+              ? "Off. Coordinators run the court signed in with their own accounts, so every assignment, score and payment is recorded against a named person."
+              : "On. Anyone with the PIN can run the court board on their phone. Once your coordinators have accounts, switch it off: every action then has a name on it, and any phone unlocked with the PIN loses access at once."}
+          </p>
+          <form action={sharedPinAction} className="mt-3">
+            <input type="hidden" name="groupId" value={group.id} />
+            <input type="hidden" name="enabled" value={group.settings?.pinDisabled ? "1" : "0"} />
+            <SubmitButton className="btn btn-ghost btn-sm">
+              {group.settings?.pinDisabled ? "Switch the PIN back on" : "Switch the PIN off"}
+            </SubmitButton>
+          </form>
         </section>
       )}
 
