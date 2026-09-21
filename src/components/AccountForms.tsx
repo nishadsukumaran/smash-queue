@@ -83,7 +83,7 @@ export function RequestRoleForm({ groupId }: { groupId: string }) {
 }
 
 /** Ask the platform for a community of your own. */
-export function RequestCommunityForm() {
+export function RequestCommunityForm({ direct = false }: { direct?: boolean }) {
   const [state, action] = useActionState<CommunityFormState, FormData>(
     requestCommunityAction,
     COMMUNITY_IDLE,
@@ -128,7 +128,7 @@ export function RequestCommunityForm() {
       </label>
       {state && !state.ok && <p className="text-sm text-amber">{state.message}</p>}
       <SubmitButton className="btn btn-primary w-full" pendingLabel="Sending...">
-        Ask for the community
+        {direct ? "Create the community" : "Ask for the community"}
       </SubmitButton>
       <p className="text-xs text-muted">
         Once it&apos;s approved you are its owner. It&apos;s yours — members, sessions and records —

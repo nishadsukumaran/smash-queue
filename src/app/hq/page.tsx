@@ -1,7 +1,7 @@
 import { SubmitButton } from "@/components/SubmitButton";
 import { listCommunities, pendingCommunityRequests } from "@/server/queries";
 import {
-  decideCommunityRequestAction, suspendCommunityAction,
+  decideCommunityRequestAction, startCommunityAction, suspendCommunityAction,
 } from "@/server/community-actions";
 import { prettyDate, prettyDateTime } from "@/lib/format";
 
@@ -17,7 +17,12 @@ export const dynamic = "force-dynamic";
  * community can see inside it, and this page is where that is easiest to
  * break by accident.
  */
-export default async function PlatformHome() {
+export default async function PlatformHome({
+  searchParams,
+}: {
+  searchParams: Promise<{ started?: string; owner?: string; error?: string }>;
+}) {
+  const sp = await searchParams;
   const [communities, requests] = await Promise.all([
     listCommunities(),
     pendingCommunityRequests(),
@@ -39,6 +44,40 @@ export default async function PlatformHome() {
           <Stat label="Sessions run" value={totals.sessions} />
           <Stat label="Waiting for you" value={requests.length} tone={requests.length ? "amber" : undefined} />
         </div>
+      </section>
+
+      <section id="start" className="card p-4">
+        <h2 className="label">Start a community for someone</h2>
+        <p className="mt-1 text-xs text-muted">
+          For a group lead who asked you directly. They become its only owner and see the
+          ownership notice when they next open the app; you get no access inside it. They need an
+          account first; their player number is on their profile. Use your own number to start
+          one you&apos;ll run yourself.
+        </p>
+        {sp.started && (
+          <p className="mt-3 text-sm text-teal">
+            {sp.started} is set up{sp.owner ? ` and owned by ${sp.owner}` : ""}.
+          </p>
+        )}
+        {sp.error && <p className="mt-3 text-sm text-rose">{sp.error}</p>}
+        <form action={startCommunityAction} className="mt-3 grid gap-2 sm:grid-cols-2">
+          <input className="input" name="name" required minLength={3} maxLength={60} placeholder="Community name" aria-label="Community name" />
+          <input className="input" name="location" maxLength={80} placeholder="Area, e.g. Dubai Marina" aria-label="Location" />
+          <input
+            className="input font-mono"
+            name="ownerPlayerNo"
+            inputMode="numeric"
+            required
+            placeholder="Owner's player number, e.g. 1047"
+            aria-label="Owner's player number"
+          />
+          <input className="input" name="description" maxLength={500} placeholder="One line about them (optional)" aria-label="Description" />
+          <div className="sm:col-span-2">
+            <SubmitButton className="btn btn-primary btn-sm" pendingLabel="Creating...">
+              Create community
+            </SubmitButton>
+          </div>
+        </form>
       </section>
 
       <section className="space-y-2">

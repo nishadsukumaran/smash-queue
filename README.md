@@ -330,7 +330,7 @@ including the platform, can see in or take it over.
 
 | Role | Scope | Can |
 | :--- | :--- | :--- |
-| **Platform admin** | The platform (`/hq`) | Approve or decline requests for new communities, see totals, suspend one for abuse. **Nothing inside any community** |
+| **Platform admin** | The platform (`/hq`) | Approve or decline requests for new communities, or start one directly for a named owner; see totals, suspend one for abuse. **Nothing inside any community** |
 | **Owner** (and co-owners) | One community | Everything below, plus: appoint organizers and co-owners, decide visibility, delete the community |
 | **Organizer** | One community | Venues, sessions, fees, members, join policy, invitations |
 | **Coordinator** | One community | The court board, check-in and payments on the night |

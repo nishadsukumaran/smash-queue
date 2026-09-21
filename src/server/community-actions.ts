@@ -125,6 +125,32 @@ export async function requestCommunity(input: {
   if (open.length >= 2)
     return { ok: false, message: "You already have requests waiting. Hang on for those first." };
 
+  // The platform admin would only be asking themselves. They get it straight
+  // away and own it as a person, exactly like anyone whose request is approved.
+  if (isPlatformAdmin(account)) {
+    const now = new Date();
+    const info = {
+      name,
+      location: input.location?.trim().slice(0, 80) || null,
+      description: input.description?.trim().slice(0, 500) || null,
+    };
+    const { groupId } = await createCommunityFor(account.id, info, now);
+    await db.insert(communityRequests).values({
+      id: newId("creq"),
+      requesterId: account.id,
+      ...info,
+      details: input.details?.trim().slice(0, 1000) || null,
+      status: "approved",
+      decidedAt: now,
+      decidedBy: account.id,
+      groupId,
+      createdAt: now,
+    });
+    await setActiveCommunity(groupId);
+    touch();
+    return { ok: true, id: groupId };
+  }
+
   await db.insert(communityRequests).values({
     id: newId("creq"),
     requesterId: account.id,
@@ -157,38 +183,16 @@ export async function withdrawCommunityRequest(requestId: string): Promise<Resul
 }
 
 /**
- * The platform's one decision about a community: whether it exists.
- *
- * Approval creates it with the requester as its only owner and nothing else
- * — no venues, no members, no settings chosen for them. From that moment it
- * is theirs.
+ * Makes a community with `ownerId` as its only owner and member, and nothing
+ * else. Shared by approving a request and by the platform admin starting one
+ * directly; either way the platform ends up with no seat inside it.
  */
-export async function decideCommunityRequest(
-  requestId: string,
-  decision: "approve" | "decline",
-  note?: string,
-): Promise<Result & { slug?: string }> {
-  const account = await currentAccount();
-  if (!isPlatformAdmin(account)) return { ok: false, message: "Not allowed" };
-
-  const [req] = await db.select().from(communityRequests).where(eq(communityRequests.id, requestId));
-  if (!req || req.status !== "pending") return { ok: false, message: "Already decided." };
-
-  const now = new Date();
-  if (decision === "decline") {
-    await db
-      .update(communityRequests)
-      .set({
-        status: "declined",
-        decidedAt: now,
-        decidedBy: account!.id,
-        decisionNote: note?.trim().slice(0, 300) || null,
-      })
-      .where(eq(communityRequests.id, requestId));
-    touch();
-    return { ok: true };
-  }
-
+async function createCommunityFor(
+  ownerId: string,
+  info: { name: string; location: string | null; description: string | null },
+  now: Date,
+) {
+  const req = { ...info, requesterId: ownerId };
   const taken = await db.select({ slug: groups.slug }).from(groups);
   const slug = uniqueSlug(req.name, taken.map((g) => g.slug));
   const groupId = newId("grp");
@@ -225,6 +229,44 @@ export async function decideCommunityRequest(
     joinedAt: now,
   });
 
+  return { groupId, slug };
+}
+
+/**
+ * The platform's one decision about a community: whether it exists.
+ *
+ * Approval creates it with the requester as its only owner and nothing else
+ * — no venues, no members, no settings chosen for them. From that moment it
+ * is theirs.
+ */
+export async function decideCommunityRequest(
+  requestId: string,
+  decision: "approve" | "decline",
+  note?: string,
+): Promise<Result & { slug?: string }> {
+  const account = await currentAccount();
+  if (!isPlatformAdmin(account)) return { ok: false, message: "Not allowed" };
+
+  const [req] = await db.select().from(communityRequests).where(eq(communityRequests.id, requestId));
+  if (!req || req.status !== "pending") return { ok: false, message: "Already decided." };
+
+  const now = new Date();
+  if (decision === "decline") {
+    await db
+      .update(communityRequests)
+      .set({
+        status: "declined",
+        decidedAt: now,
+        decidedBy: account!.id,
+        decisionNote: note?.trim().slice(0, 300) || null,
+      })
+      .where(eq(communityRequests.id, requestId));
+    touch();
+    return { ok: true };
+  }
+
+  const { groupId, slug } = await createCommunityFor(req.requesterId, req, now);
+
   await db
     .update(communityRequests)
     .set({
@@ -245,6 +287,69 @@ export async function decideCommunityRequest(
 
   touch();
   return { ok: true, id: groupId, slug };
+}
+
+/**
+ * The platform admin sets a community up for someone, typically a group lead
+ * who asked in person. Same outcome as approving their request: that player
+ * is the only owner, and the platform keeps no seat inside it. Recorded as an
+ * approved request so there is one history of how every community began.
+ */
+export async function startCommunity(input: {
+  name: string;
+  location?: string;
+  description?: string;
+  ownerPlayerNo: string;
+}): Promise<Result & { slug?: string }> {
+  const account = await currentAccount();
+  if (!isPlatformAdmin(account)) return { ok: false, message: "Not allowed" };
+
+  const name = input.name.trim().replace(/\s+/g, " ");
+  if (name.length < 3) return { ok: false, message: "Give it a name people will recognise." };
+  if (name.length > 60) return { ok: false, message: "That name is too long." };
+
+  const no = Number(input.ownerPlayerNo.replace(/\D/g, ""));
+  if (!Number.isInteger(no) || no < 1001)
+    return { ok: false, message: "Enter the owner's player number, e.g. 1047." };
+  const [owner] = await db
+    .select({ id: users.id, name: users.name, onboardedAt: users.onboardedAt })
+    .from(users)
+    .where(eq(users.playerNo, no));
+  if (!owner || !owner.onboardedAt)
+    return {
+      ok: false,
+      message: `No registered player #${no}. They need to sign up first; their number is on their profile.`,
+    };
+
+  const now = new Date();
+  const info = {
+    name,
+    location: input.location?.trim().slice(0, 80) || null,
+    description: input.description?.trim().slice(0, 500) || null,
+  };
+  const { groupId, slug } = await createCommunityFor(owner.id, info, now);
+  await db.insert(communityRequests).values({
+    id: newId("creq"),
+    requesterId: owner.id,
+    ...info,
+    details: "Started by the platform admin",
+    status: "approved",
+    decidedAt: now,
+    decidedBy: account!.id,
+    groupId,
+    createdAt: now,
+  });
+  if (owner.id === account!.id) await setActiveCommunity(groupId);
+  else
+    pushLater([owner.id], {
+      title: "You have a new community",
+      body: `${name} is set up and it's yours. Open it to get started.`,
+      url: "/admin",
+      tag: `community-${groupId}`,
+    });
+
+  touch();
+  return { ok: true, id: groupId, slug, message: owner.name };
 }
 
 /**
@@ -859,6 +964,8 @@ export async function requestCommunityAction(
     description: str(fd, "description"),
     details: str(fd, "details"),
   });
+  // Created on the spot (platform admin): straight into it.
+  if (res.ok && res.id) redirect("/admin");
   return res.ok
     ? { ok: true, message: "Request sent. You'll see the answer on your profile." }
     : { ok: false, message: res.message ?? "Could not send that." };
@@ -874,6 +981,20 @@ export async function decideCommunityRequestAction(fd: FormData) {
     str(fd, "decision") === "approve" ? "approve" : "decline",
     str(fd, "note"),
   );
+}
+
+export async function startCommunityAction(fd: FormData) {
+  const name = str(fd, "name");
+  const res = await startCommunity({
+    name,
+    location: str(fd, "location"),
+    description: str(fd, "description"),
+    ownerPlayerNo: str(fd, "ownerPlayerNo"),
+  });
+  const q = res.ok
+    ? `started=${encodeURIComponent(name)}&owner=${encodeURIComponent(res.message ?? "")}`
+    : `error=${encodeURIComponent(res.message ?? "Could not start that.")}`;
+  redirect(`/hq?${q}#start`);
 }
 
 export async function suspendCommunityAction(fd: FormData) {

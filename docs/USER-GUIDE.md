@@ -400,6 +400,11 @@ approved you're its owner, and the answer shows up on your profile.
 The platform admin approves new communities, and that is almost all. Open **Platform** from
 your profile (or go to `/hq`):
 
+- **Start a community for someone** — name, area, and the owner's player number (from their
+  profile; they need an account first). They become its only owner and see the ownership
+  notice when they next open the app. You get no access inside it. Enter your own number to
+  start one you'll run yourself, or just use **Start a community** under Communities, which
+  for the platform admin creates it straight away instead of sending a request.
 - **Requests to start a community** — approve or decline, with an optional note back. On
   approval the requester becomes the owner.
 - **Totals** — how many communities, members and sessions. Counts only; no names.
