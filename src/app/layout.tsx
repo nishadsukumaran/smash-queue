@@ -40,7 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body className="min-h-dvh">
-        <header className="sticky top-0 z-30 border-b border-line/70 bg-ink/85 backdrop-blur">
+        <header className="safe-top sticky top-0 z-30 border-b border-line/70 bg-ink/85 backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3 sm:gap-3">
             <Link
               href="/"

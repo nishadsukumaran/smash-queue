@@ -44,7 +44,7 @@ export function WinBurst({ match }: { match: FinishedMatch | null }) {
     <>
       <Confetti />
       <div
-        className="fixed inset-x-0 top-16 z-50 flex justify-center px-4"
+        className="below-safe-top fixed inset-x-0 z-50 flex justify-center px-4"
         role="status"
         aria-live="polite"
       >
