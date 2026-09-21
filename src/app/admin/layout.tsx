@@ -2,6 +2,7 @@ import Link from "next/link";
 import { OrganizerGate } from "@/components/StaffGate";
 import { SubmitButton } from "@/components/SubmitButton";
 import { CommunitySwitcher } from "@/components/CommunitySwitcher";
+import { OwnershipNotice } from "@/components/OwnershipNotice";
 import { signOutAction } from "@/server/auth-actions";
 import { currentAccount, isPlatformAdmin } from "@/lib/auth";
 import { activeCommunity, myCommunities } from "@/lib/tenant";
@@ -25,21 +26,19 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <p className="label">Organizer</p>
         <h2 className="mt-1 text-lg font-bold">No community open</h2>
         <p className="mt-1 text-sm text-muted">
-          {isPlatformAdmin(account)
-            ? "Pick one from the platform console, or create the first."
-            : account
-              ? "You don't run a community yet. Whoever runs yours can appoint you."
-              : "Sign in with the email your community has on file."}
+          {account
+            ? "You don't run a community yet. Ask your community's owner, or request a community of your own from your profile."
+            : "Sign in to reach your communities."}
         </p>
         <div className="mt-4 flex flex-col gap-2">
-          {isPlatformAdmin(account) && (
-            <Link href="/hq" className="btn btn-primary w-full">
-              Platform console
+          {account && (
+            <Link href="/me" className="btn btn-primary w-full">
+              My profile
             </Link>
           )}
           {!account && (
             <Link href="/signin?next=/admin" className="btn btn-primary w-full">
-              Email me a sign-in link
+              Sign in
             </Link>
           )}
           <Link href="/communities" className="btn btn-ghost w-full">
@@ -51,7 +50,19 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   const group = active.group;
-  const mine = (await myCommunities(account)).filter((m) => m.role === "organizer");
+  const mine = (await myCommunities(account)).filter(
+    (m) => m.role === "organizer" || m.role === "owner",
+  );
+
+  // An owner reads and accepts the ownership notice once, before anything
+  // else. Recorded, so there is a record of what they were told.
+  if (active.role === "owner" && !group.ownerAcceptedAt) {
+    return (
+      <OrganizerGate groupId={group.id} next="/admin">
+        <OwnershipNotice groupId={group.id} name={group.name} />
+      </OrganizerGate>
+    );
+  }
 
   const tabs = [
     { href: "/admin", label: "Sessions" },

@@ -1,11 +1,8 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
 import { AcceptInviteForm } from "@/components/AcceptInviteForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { inspectInvite, switchCommunityAction } from "@/server/community-actions";
-import { currentUserId } from "@/lib/identity";
-import { db } from "@/db";
-import { users } from "@/db/schema";
+import { currentAccount } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -41,8 +38,7 @@ export default async function AcceptInvitePage({
     );
   }
 
-  const uid = await currentUserId();
-  const me = uid ? (await db.select().from(users).where(eq(users.id, uid)))[0] : null;
+  const account = await currentAccount();
 
   if (invite.alreadyIn) {
     return (
@@ -66,15 +62,28 @@ export default async function AcceptInvitePage({
       <p className="mt-2 text-sm text-muted">
         {invite.role === "player"
           ? "Accept and you're on the list — no waiting for approval, because you were asked for by name."
-          : `You've been invited to help run this one, as ${invite.role === "organizer" ? "an organizer" : "a coordinator"}.`}
+          : `You've been invited to help run this one, as ${
+              invite.role === "owner" ? "a co-owner" : invite.role === "organizer" ? "an organizer" : "a coordinator"
+            }.`}
       </p>
 
       <div className="mt-4">
-        <AcceptInviteForm
-          token={invite.token}
-          knownAs={me?.name ?? null}
-          suggestedName={invite.name}
-        />
+        {account?.onboarded ? (
+          <>
+            <p className="mb-3 text-sm text-muted">
+              Joining as <span className="font-semibold text-chalk">{account.name}</span>{" "}
+              <span className="font-mono">#{account.playerNo}</span>
+            </p>
+            <AcceptInviteForm token={invite.token} />
+          </>
+        ) : (
+          <Link
+            href={`/signin?next=${encodeURIComponent(`/i/${invite.token}`)}`}
+            className="btn btn-primary w-full"
+          >
+            Sign in or create an account to accept
+          </Link>
+        )}
       </div>
 
       <p className="mt-4 text-center text-xs text-muted">

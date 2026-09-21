@@ -97,7 +97,7 @@ async function main() {
     id: newId("gm"),
     groupId,
     userId: ownerId,
-    role: "organizer",
+    role: "owner",
     joinedAt: now,
   });
 

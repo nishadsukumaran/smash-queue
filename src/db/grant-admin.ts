@@ -27,7 +27,7 @@ async function main() {
   const [name, rawEmail, roleArg] = process.argv.slice(2);
   const email = (rawEmail ?? "").trim().toLowerCase();
   const platform = roleArg === "platform";
-  const role = (platform ? "organizer" : roleArg ?? "organizer") as "organizer" | "coordinator";
+  const role = (platform ? "organizer" : roleArg ?? "organizer") as "owner" | "organizer" | "coordinator";
 
   if (!name || !email) {
     console.error('Usage: npm run db:grant-admin -- "Full Name" email@example.com [organizer|coordinator]');
@@ -109,7 +109,7 @@ async function main() {
         joinedAt: now,
       });
       console.log(`Added to "${group.name}" as ${role}.`);
-    } else if (member.role !== role && role === "organizer") {
+    } else if (member.role !== role && (role === "organizer" || role === "owner")) {
       await db.update(groupMembers).set({ role }).where(eq(groupMembers.id, member.id));
       console.log(`Promoted to ${role} in "${group.name}" (was ${member.role}).`);
     } else {

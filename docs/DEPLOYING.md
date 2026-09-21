@@ -104,6 +104,12 @@ matches, for local development. **Never point it at production.**
 
 ### 3. Vercel
 
+Set `CRON_SECRET` (any long random string, e.g. `openssl rand -hex 32`) on the project.
+`vercel.json` schedules `/api/cron/purge` daily; Vercel sends the secret with each call, and
+the route erases communities whose owners deleted them more than 30 days ago. Without the
+secret the route refuses every call and nothing is ever purged.
+
+
 Import the GitHub repo and set these environment variables:
 
 | Variable | Value |

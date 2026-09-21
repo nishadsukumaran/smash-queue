@@ -48,7 +48,7 @@ export default async function MembersDirectoryPage() {
           <p className="p-4 text-sm text-muted">Nobody yet. You could be first.</p>
         )}
         {people.map((p) => {
-          const band = ratingBand(p.user.rating);
+          const band = ratingBand(p.rating);
           const isMe = p.user.id === meId;
           return (
             <div

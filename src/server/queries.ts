@@ -1,9 +1,10 @@
 import "server-only";
-import { and, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, notInArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  announcementReads, announcements,
-  bookings, checkIns, groupInvites, groupMembers, groups, matchPlayers, matchScores, matches,
+  announcementReads, announcements, authEmails,
+  bookings, checkIns, communityRequests, groupInvites, groupMembers, groups, matchPlayers,
+  matchScores, matches, roleRequests,
   overrides, payments, preferences, sessionCosts, sessions, users, venues,
   type Availability, type BookingStatus, type Group, type PaymentStatus,
 } from "@/db/schema";
@@ -38,9 +39,23 @@ export async function getGroupByInviteCode(code: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * A session by its share code — unless its community has been deleted or
+ * suspended, in which case it does not exist as far as anyone can tell.
+ */
 export async function getSessionByCode(code: string) {
-  const rows = await db.select().from(sessions).where(eq(sessions.code, code.toUpperCase()));
-  return rows[0] ?? null;
+  const rows = await db
+    .select({ s: sessions })
+    .from(sessions)
+    .innerJoin(groups, eq(groups.id, sessions.groupId))
+    .where(
+      and(
+        eq(sessions.code, code.toUpperCase()),
+        isNull(groups.deletedAt),
+        isNull(groups.archivedAt),
+      ),
+    );
+  return rows[0]?.s ?? null;
 }
 
 export async function getVenue(venueId: string | null) {
@@ -123,6 +138,28 @@ export type RosterEntry = {
   amount: number;
 };
 
+/**
+ * Ratings inside one community. Everything that balances teams or shows a
+ * rating on a session reads from here, never from the user row, so a player's
+ * standing in one community cannot leak into — or be shaped by — another.
+ */
+async function communityRatings(groupId: string, userIds: string[]) {
+  if (userIds.length === 0) return new Map<string, number>();
+  const rows = await db
+    .select({ userId: groupMembers.userId, rating: groupMembers.rating })
+    .from(groupMembers)
+    .where(and(eq(groupMembers.groupId, groupId), inArray(groupMembers.userId, userIds)));
+  return new Map(rows.map((r) => [r.userId, r.rating]));
+}
+
+async function groupOfSession(sessionId: string) {
+  const [row] = await db
+    .select({ g: sessions.groupId })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId));
+  return row?.g ?? null;
+}
+
 export async function getRoster(sessionId: string): Promise<RosterEntry[]> {
   const [bookingRows, checkInRows, paymentRows, completed, live] = await Promise.all([
     db
@@ -160,6 +197,11 @@ export async function getRoster(sessionId: string): Promise<RosterEntry[]> {
       winsByUser.set(row.userId, (winsByUser.get(row.userId) ?? 0) + 1);
   }
 
+  const groupId = await groupOfSession(sessionId);
+  const ratings = groupId
+    ? await communityRatings(groupId, bookingRows.map((r) => r.u.id))
+    : new Map<string, number>();
+
   const courtByUser = new Map(live.map((l) => [l.userId, l.court]));
   const checkInByUser = new Map(checkInRows.map((c) => [c.userId, c]));
   const paymentByUser = new Map(paymentRows.map((p) => [p.userId, p]));
@@ -171,7 +213,7 @@ export async function getRoster(sessionId: string): Promise<RosterEntry[]> {
       return {
         userId: u.id,
         name: u.name,
-        rating: u.rating,
+        rating: ratings.get(u.id) ?? 1200,
         bookingStatus: b.status,
         waitlistPosition: b.waitlistPosition,
         checkedInAt: ci?.checkedInAt ?? null,
@@ -222,6 +264,11 @@ export async function getMatches(sessionId: string): Promise<MatchView[]> {
     db.select().from(matchScores).where(inArray(matchScores.matchId, ids)),
   ]);
 
+  const groupId = await groupOfSession(sessionId);
+  const ratings = groupId
+    ? await communityRatings(groupId, Array.from(new Set(mps.map((x) => x.u.id))))
+    : new Map<string, number>();
+
   const scoreByMatch = new Map(scores.map((s) => [s.matchId, s]));
   return rows.map((m) => {
     const players = mps.filter((x) => x.mp.matchId === m.id);
@@ -229,7 +276,7 @@ export async function getMatches(sessionId: string): Promise<MatchView[]> {
     const pick = (team: "A" | "B") =>
       players
         .filter((x) => x.mp.team === team)
-        .map((x) => ({ id: x.u.id, name: x.u.name, rating: x.u.rating }));
+        .map((x) => ({ id: x.u.id, name: x.u.name, rating: ratings.get(x.u.id) ?? 1200 }));
     return {
       id: m.id,
       court: m.court,
@@ -503,6 +550,9 @@ export async function getSessionSummary(sessionId: string): Promise<SessionSumma
 
 export type PlayerStats = {
   user: typeof users.$inferSelect;
+  /** The community rating when scoped to one community; otherwise the best of them. */
+  rating: number;
+  ratingGames: number;
   sessionsAttended: number;
   games: number;
   wins: number;
@@ -514,7 +564,16 @@ export type PlayerStats = {
   recentForm: ("W" | "L" | "-")[];
 };
 
-export async function getPlayerStats(userId: string): Promise<PlayerStats | null> {
+/**
+ * A player's record — within one community when `groupId` is given, and
+ * across all of theirs when it isn't.
+ *
+ * The unscoped form is only ever shown to the player themselves. Anything a
+ * community shows about its members must pass its own id, or it would be
+ * showing them games played somewhere else, which is exactly the
+ * cross-community sharing owners are promised never happens.
+ */
+export async function getPlayerStats(userId: string, groupId?: string): Promise<PlayerStats | null> {
   const userRows = await db.select().from(users).where(eq(users.id, userId));
   const user = userRows[0];
   if (!user) return null;
@@ -523,7 +582,22 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats | null
     .select({ mp: matchPlayers, m: matches })
     .from(matchPlayers)
     .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
-    .where(and(eq(matchPlayers.userId, userId), eq(matches.status, "completed")));
+    .innerJoin(sessions, eq(sessions.id, matches.sessionId))
+    .where(
+      and(
+        eq(matchPlayers.userId, userId),
+        eq(matches.status, "completed"),
+        groupId ? eq(sessions.groupId, groupId) : undefined,
+      ),
+    );
+
+  const ratingRows = await db
+    .select({ rating: groupMembers.rating, games: groupMembers.ratingGames })
+    .from(groupMembers)
+    .where(
+      and(eq(groupMembers.userId, userId), groupId ? eq(groupMembers.groupId, groupId) : undefined),
+    );
+  const bestRating = ratingRows.sort((a, b) => b.rating - a.rating)[0];
 
   const matchIds = mine.map((r) => r.m.id);
   const [others, scores, attendance] = await Promise.all([
@@ -537,7 +611,13 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats | null
     matchIds.length
       ? db.select().from(matchScores).where(inArray(matchScores.matchId, matchIds))
       : Promise.resolve([]),
-    db.select().from(checkIns).where(eq(checkIns.userId, userId)),
+    db
+      .select({ id: checkIns.id })
+      .from(checkIns)
+      .innerJoin(sessions, eq(sessions.id, checkIns.sessionId))
+      .where(
+        and(eq(checkIns.userId, userId), groupId ? eq(sessions.groupId, groupId) : undefined),
+      ),
   ]);
 
   const winnerByMatch = new Map(scores.map((s) => [s.matchId, s.winner]));
@@ -578,6 +658,8 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats | null
 
   return {
     user,
+    rating: bestRating?.rating ?? 1200,
+    ratingGames: bestRating?.games ?? 0,
     sessionsAttended,
     games: matchIds.length,
     wins,
@@ -590,12 +672,32 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats | null
   };
 }
 
+/** This community's members ranked on this community's games only. */
 export async function getLeaderboard(groupId: string) {
   const members = await listMembers(groupId);
-  const stats = await Promise.all(members.map((m) => getPlayerStats(m.user.id)));
+  const stats = await Promise.all(members.map((m) => getPlayerStats(m.user.id, groupId)));
   return stats
     .filter((s): s is PlayerStats => Boolean(s))
-    .sort((a, b) => b.user.rating - a.user.rating || b.games - a.games);
+    .sort((a, b) => b.rating - a.rating || b.games - a.games);
+}
+
+/** Everything the /me hub shows about one of the player's own communities. */
+export async function myCommunityRecords(userId: string) {
+  const rows = await db
+    .select({ membership: groupMembers, group: groups })
+    .from(groupMembers)
+    .innerJoin(groups, eq(groups.id, groupMembers.groupId))
+    .where(
+      and(
+        eq(groupMembers.userId, userId),
+        inArray(groupMembers.status, ["active", "pending"]),
+        isNull(groups.deletedAt),
+        isNull(groups.archivedAt),
+      ),
+    )
+    .orderBy(groups.name);
+  const stats = await Promise.all(rows.map((r) => getPlayerStats(userId, r.group.id)));
+  return rows.map((r, i) => ({ ...r, stats: stats[i] }));
 }
 
 /* ---------------------------------------------------------- announcements */
@@ -675,64 +777,48 @@ export async function unreadAnnouncementCount(groupId: string, viewerId: string 
 /* ----------------------------------------------------------- communities */
 
 export type CommunityCard = {
-  group: Group;
+  group: Pick<Group, "id" | "name" | "slug" | "location" | "visibility" | "createdAt" | "archivedAt" | "deletedAt">;
   members: number;
-  pending: number;
   sessions: number;
-  organizers: Array<{ id: string; name: string; email: string | null }>;
 };
 
 /**
- * Every community with the four numbers the platform console needs to tell
- * a thriving one from an abandoned one at a glance.
- *
- * Four queries stitched in JavaScript rather than one clever join. Over the
- * HTTP driver each round trip costs the same whatever it returns, and four
- * readable ones beat a single query nobody will dare change later.
+ * What the platform console may know about each community: that it exists,
+ * roughly how big and how busy it is, and its status. Deliberately no names,
+ * no organizers, no emails — the platform has no business with those, and a
+ * query that never selects them cannot leak them.
  */
 export async function listCommunities(): Promise<CommunityCard[]> {
-  const [all, memberCounts, sessionCounts, organizerRows] = await Promise.all([
-    db.select().from(groups).orderBy(groups.name),
+  const [all, memberCounts, sessionCounts] = await Promise.all([
     db
       .select({
-        groupId: groupMembers.groupId,
-        status: groupMembers.status,
-        n: sql<number>`count(*)::int`,
+        id: groups.id,
+        name: groups.name,
+        slug: groups.slug,
+        location: groups.location,
+        visibility: groups.visibility,
+        createdAt: groups.createdAt,
+        archivedAt: groups.archivedAt,
+        deletedAt: groups.deletedAt,
       })
+      .from(groups)
+      .orderBy(groups.name),
+    db
+      .select({ groupId: groupMembers.groupId, n: sql<number>`count(*)::int` })
       .from(groupMembers)
-      .groupBy(groupMembers.groupId, groupMembers.status),
+      .where(eq(groupMembers.status, "active"))
+      .groupBy(groupMembers.groupId),
     db
       .select({ groupId: sessions.groupId, n: sql<number>`count(*)::int` })
       .from(sessions)
       .groupBy(sessions.groupId),
-    db
-      .select({ groupId: groupMembers.groupId, user: users })
-      .from(groupMembers)
-      .innerJoin(users, eq(users.id, groupMembers.userId))
-      .where(and(eq(groupMembers.role, "organizer"), eq(groupMembers.status, "active")))
-      .orderBy(users.name),
   ]);
-
-  const active = new Map<string, number>();
-  const pending = new Map<string, number>();
-  for (const row of memberCounts) {
-    if (row.status === "active") active.set(row.groupId, row.n);
-    if (row.status === "pending") pending.set(row.groupId, row.n);
-  }
+  const members = new Map(memberCounts.map((r) => [r.groupId, r.n]));
   const held = new Map(sessionCounts.map((r) => [r.groupId, r.n]));
-  const organizers = new Map<string, CommunityCard["organizers"]>();
-  for (const row of organizerRows) {
-    const list = organizers.get(row.groupId) ?? [];
-    list.push({ id: row.user.id, name: row.user.name, email: row.user.email });
-    organizers.set(row.groupId, list);
-  }
-
   return all.map((group) => ({
     group,
-    members: active.get(group.id) ?? 0,
-    pending: pending.get(group.id) ?? 0,
+    members: members.get(group.id) ?? 0,
     sessions: held.get(group.id) ?? 0,
-    organizers: organizers.get(group.id) ?? [],
   }));
 }
 
@@ -749,7 +835,9 @@ export async function listPublicCommunities() {
     db
       .select()
       .from(groups)
-      .where(and(eq(groups.visibility, "public"), isNull(groups.archivedAt)))
+      .where(
+        and(eq(groups.visibility, "public"), isNull(groups.archivedAt), isNull(groups.deletedAt)),
+      )
       .orderBy(groups.name),
     db
       .select({ groupId: groupMembers.groupId, n: sql<number>`count(*)::int` })
@@ -771,7 +859,7 @@ export async function listOrganizers(groupId: string) {
       and(
         eq(groupMembers.groupId, groupId),
         eq(groupMembers.status, "active"),
-        inArray(groupMembers.role, ["organizer", "coordinator"]),
+        inArray(groupMembers.role, ["owner", "organizer", "coordinator"]),
       ),
     )
     .orderBy(desc(groupMembers.role), users.name);
@@ -807,4 +895,129 @@ export async function communitySummary(groupId: string) {
     upcoming: upcoming[0]?.n ?? 0,
     venues: venueRows.map((v) => v.name),
   };
+}
+
+/** For /welcome: did registering take over an existing player, and how much history came with it. */
+export async function claimedHistory(userId: string) {
+  const [memberships, games] = await Promise.all([
+    db.select({ id: groupMembers.id }).from(groupMembers).where(eq(groupMembers.userId, userId)),
+    db.select({ id: matchPlayers.id }).from(matchPlayers).where(eq(matchPlayers.userId, userId)),
+  ]);
+  return { communities: memberships.length, games: games.length };
+}
+
+/* ------------------------------------------------------------- my inbox */
+
+/** Invitations waiting in this person's app. Callers pass the signed-in id only. */
+export async function myInvites(userId: string) {
+  return db
+    .select({ invite: groupInvites, group: groups, inviter: users })
+    .from(groupInvites)
+    .innerJoin(groups, eq(groups.id, groupInvites.groupId))
+    .leftJoin(users, eq(users.id, groupInvites.invitedBy))
+    .where(
+      and(
+        eq(groupInvites.userId, userId),
+        isNull(groupInvites.acceptedAt),
+        isNull(groupInvites.revokedAt),
+        gt(groupInvites.expiresAt, new Date()),
+        isNull(groups.deletedAt),
+        isNull(groups.archivedAt),
+      ),
+    )
+    .orderBy(desc(groupInvites.createdAt));
+}
+
+export async function myCommunityRequests(userId: string) {
+  return db
+    .select()
+    .from(communityRequests)
+    .where(eq(communityRequests.requesterId, userId))
+    .orderBy(desc(communityRequests.createdAt))
+    .limit(10);
+}
+
+/** Communities this person owns that are deleted but still recoverable. */
+export async function myDeletedCommunities(userId: string) {
+  return db
+    .select({ group: groups })
+    .from(groupMembers)
+    .innerJoin(groups, eq(groups.id, groupMembers.groupId))
+    .where(
+      and(
+        eq(groupMembers.userId, userId),
+        eq(groupMembers.role, "owner"),
+        eq(groupMembers.status, "active"),
+        isNotNull(groups.deletedAt),
+      ),
+    );
+}
+
+export async function myRoleRequests(userId: string) {
+  return db
+    .select({ request: roleRequests, group: groups })
+    .from(roleRequests)
+    .innerJoin(groups, eq(groups.id, roleRequests.groupId))
+    .where(and(eq(roleRequests.userId, userId), eq(roleRequests.status, "pending")));
+}
+
+/** Role requests an owner has to decide on. */
+export async function pendingRoleRequests(groupId: string) {
+  return db
+    .select({ request: roleRequests, user: users })
+    .from(roleRequests)
+    .innerJoin(users, eq(users.id, roleRequests.userId))
+    .where(and(eq(roleRequests.groupId, groupId), eq(roleRequests.status, "pending")))
+    .orderBy(roleRequests.createdAt);
+}
+
+/** The platform's queue: requests to start a community. */
+export async function pendingCommunityRequests() {
+  return db
+    .select({ request: communityRequests, requester: users })
+    .from(communityRequests)
+    .innerJoin(users, eq(users.id, communityRequests.requesterId))
+    .where(eq(communityRequests.status, "pending"))
+    .orderBy(communityRequests.createdAt);
+}
+
+/**
+ * When and where a public community plays, for people deciding whether to
+ * join. Deliberately no roster, no bookings, no names: the time and the place
+ * are the only things a stranger needs, and the only things the owner has
+ * agreed to show.
+ */
+export async function schedulePreview(groupId: string) {
+  const today = new Date().toISOString().slice(0, 10);
+  return db
+    .select({
+      name: sessions.name,
+      date: sessions.date,
+      startTime: sessions.startTime,
+      endTime: sessions.endTime,
+      fee: sessions.fee,
+      currency: sessions.currency,
+      venue: venues.name,
+    })
+    .from(sessions)
+    .leftJoin(venues, eq(venues.id, sessions.venueId))
+    .where(
+      and(
+        eq(sessions.groupId, groupId),
+        inArray(sessions.status, ["scheduled", "live"]),
+        sql`${sessions.date} >= ${today}`,
+      ),
+    )
+    .orderBy(sessions.date, sessions.startTime)
+    .limit(6);
+}
+
+/** Which of these people have an account. Used to lock their names on the tap-your-name list. */
+export async function registeredAmong(userIds: string[]) {
+  if (userIds.length === 0) return new Set<string>();
+  const rows = await db
+    .select({ id: authEmails.userId })
+    .from(authEmails)
+    .where(inArray(authEmails.userId, userIds));
+  return new Set(rows.map((r) => r.id));
 }

@@ -1,10 +1,11 @@
 import "./env";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { openDb } from "./raw";
 import {
   bookings, checkIns, groupMembers, groups, matchPlayers, matchScores, matches,
   notifications, overrides, payments, preferences, sessionCosts, sessions, users, venues,
   authEmails, authSessions, authTokens, announcements, announcementReads, groupInvites,
+  trustedDevices, roleRequests, communityRequests,
 } from "./schema";
 import { newId, inviteCode } from "@/lib/ids";
 import { colorFor } from "@/lib/format";
@@ -51,6 +52,7 @@ async function wipe() {
     // Announcement reads reference announcements, announcements reference
     // sessions. Anything added here later has to go above what it points at,
     // or the delete fails on the foreign key rather than cascading.
+    trustedDevices, roleRequests, communityRequests,
     groupInvites, announcementReads, announcements,
     authSessions, authEmails, authTokens,
     notifications, overrides, preferences, sessionCosts, payments,
@@ -127,9 +129,10 @@ async function main() {
         id: newId("gm"),
         groupId,
         userId: p.id,
-        role: i === 0 ? ("organizer" as const) : i < 3 ? ("coordinator" as const) : ("player" as const),
+        role: i === 0 ? ("owner" as const) : i < 3 ? ("coordinator" as const) : ("player" as const),
         status: "active" as const,
         joinedAt: now,
+        rating: p.rating,
       })),
     );
 
@@ -309,10 +312,11 @@ async function main() {
       ]);
   }
 
+  // Ratings are per community now; the demo community holds the real ones.
   for (const p of people)
-    await db.update(users)
+    await db.update(groupMembers)
       .set({ rating: ratings.get(p.id)!, ratingGames: ratingGames.get(p.id)! })
-      .where(eq(users.id, p.id));
+      .where(and(eq(groupMembers.userId, p.id), eq(groupMembers.groupId, groupId)));
 
   /* ------------------------------------------------ tonight, mid-session */
 

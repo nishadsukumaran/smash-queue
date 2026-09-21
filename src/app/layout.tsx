@@ -67,8 +67,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <span className="max-w-20 truncate text-xs font-semibold sm:max-w-32">{user.name}</span>
                 </Link>
               ) : (
-                <Link href="/who" className="btn btn-ghost btn-sm shrink-0 whitespace-nowrap">
-                  Who are you?
+                <Link href="/signin" className="btn btn-ghost btn-sm shrink-0 whitespace-nowrap">
+                  Sign in
                 </Link>
               )}
             </div>

@@ -12,6 +12,8 @@ export function SubmitButton({
   disabled,
   title,
   haptic = "tap",
+  name,
+  value,
 }: {
   children: ReactNode;
   className?: string;
@@ -19,6 +21,9 @@ export function SubmitButton({
   disabled?: boolean;
   title?: string;
   haptic?: "tap" | "confirm" | "win" | "error" | "none";
+  /** Lets one form carry two decisions, e.g. approve and decline. */
+  name?: string;
+  value?: string;
 }) {
   const { pending } = useFormStatus();
   return (
@@ -29,6 +34,8 @@ export function SubmitButton({
       className={`${className}${pending ? " btn-working" : ""}`}
       disabled={pending || disabled}
       title={title}
+      name={name}
+      value={value}
       onClick={() => haptic !== "none" && buzz(haptic)}
     >
       {pending ? (

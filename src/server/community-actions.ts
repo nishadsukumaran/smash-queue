@@ -1,40 +1,41 @@
 "use server";
 
 /**
- * Communities: creating them, staffing them, getting into them.
+ * Communities: asking for one, owning one, getting into one.
  *
- * Three roles meet in this file and the whole design is about keeping them
- * apart.
+ * The rule everything here serves: a community and its members belong to its
+ * owner. The platform can approve a request for a new community and suspend
+ * one for abuse. It cannot appoint an organizer, open a roster, read a
+ * payment or take a community over — there is no code path for it, which is
+ * the only honest way to make that promise.
  *
- *   Platform admin — makes communities and appoints the people who run them.
- *                    Scoped to nothing, which is why it lives on `users` and
- *                    not in a membership row.
- *   Organizer      — runs one community: its venues, its sessions, its
- *                    roster, its money. Can invite, and can appoint other
- *                    organizers beside them.
- *   Player         — belongs to a community, and sees nothing of one they do
- *                    not belong to.
+ *   Platform admin — approves new communities, suspends abusive ones.
+ *   Owner          — the community is theirs. Appoints organizers and
+ *                    co-owners, decides who can find it, can delete it.
+ *   Organizer      — runs it: sessions, venues, members, money, invitations.
+ *   Coordinator    — runs the court on the night.
+ *   Player         — plays, and can ask for more.
  *
- * Every export here is a reachable endpoint. A server action can be invoked
- * by anyone who can post a form, so the permission check lives in the action
- * and never only in the page that draws the button.
+ * Every export is a reachable endpoint. A server action can be invoked by
+ * anyone who can post a form, so each one checks its caller against the
+ * community its target actually belongs to.
  */
 
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
-  authEmails, groupInvites, groupMembers, groups, users,
-  type JoinPolicy, type MemberRole, type Visibility,
+  communityRequests, groupInvites, groupMembers, groups, roleRequests, users,
+  type MemberRole, type Visibility,
 } from "@/db/schema";
 import { inviteCode as mintInviteCode, newId } from "@/lib/ids";
-import { colorFor } from "@/lib/format";
 import { uniqueSlug } from "@/lib/slug";
 import { joinPolicyOf } from "@/lib/join-policy";
-import { canOrganize, currentAccount, isPlatformAdmin, normalizeEmail } from "@/lib/auth";
-import { currentUserId, setCurrentUserId } from "@/lib/identity";
+import {
+  canOrganize, canOwn, currentAccount, isPlatformAdmin, normalizeEmail, type Account,
+} from "@/lib/auth";
 import { setActiveCommunity } from "@/lib/tenant";
 import { requestOrigin } from "@/lib/origin";
 import { sendInvite } from "@/lib/mail";
@@ -42,9 +43,9 @@ import { DEFAULT_WEIGHTS, BALANCE_BY_TYPE } from "@/lib/queue-engine";
 import type { CommunityFormState, InviteView, JoinFormState } from "./community-types";
 
 type Result = { ok: boolean; message?: string; id?: string };
-type InviteResult = Result & { url?: string; delivered?: boolean };
 
 const INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const RECOVERY_DAYS = 30;
 const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -54,68 +55,162 @@ function touch() {
   revalidatePath("/", "layout");
 }
 
-/** Loose match so "arun menon", "Arun  Menon" and "ArunMenon" all collide. */
-const nameKey = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "");
+/** Signed in and set up. Everything past browsing needs a real account now. */
+async function member(): Promise<Account | null> {
+  const account = await currentAccount();
+  return account && account.onboarded ? account : null;
+}
 
-/* ---------------------------------------------------- platform: creating */
+async function freshInviteCode(): Promise<string> {
+  // 34 characters, eight of them: a collision is vanishingly unlikely, and
+  // "vanishingly" is still not "never" when a unique index would 500 on it.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = mintInviteCode();
+    const [clash] = await db
+      .select({ id: groups.id })
+      .from(groups)
+      .where(eq(groups.inviteCode, code));
+    if (!clash) return code;
+  }
+  return `${mintInviteCode()}${Date.now().toString(36).toUpperCase().slice(-2)}`;
+}
 
-export async function createCommunity(input: {
+async function liveGroup(groupId: string) {
+  const [group] = await db.select().from(groups).where(eq(groups.id, groupId));
+  if (!group || group.archivedAt || group.deletedAt) return null;
+  return group;
+}
+
+async function ownerCount(groupId: string) {
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(groupMembers)
+    .where(
+      and(
+        eq(groupMembers.groupId, groupId),
+        eq(groupMembers.role, "owner"),
+        eq(groupMembers.status, "active"),
+      ),
+    );
+  return n;
+}
+
+/* ------------------------------------------------ asking for a community */
+
+/**
+ * Any registered player can ask to start a community. The platform admin
+ * approves it, and the person who asked becomes its owner — nobody else is
+ * put in charge of it on their behalf.
+ */
+export async function requestCommunity(input: {
   name: string;
   location?: string;
   description?: string;
-  visibility?: Visibility;
-  joinPolicy?: JoinPolicy;
-  currency?: string;
-  defaultFee?: number;
-  staffPin?: string;
-  organizerName?: string;
-  organizerEmail?: string;
-}): Promise<Result & { slug?: string }> {
+  details?: string;
+}): Promise<Result> {
+  const account = await member();
+  if (!account) return { ok: false, message: "Sign in to ask for a community." };
+
+  const name = input.name.trim().replace(/\s+/g, " ");
+  if (name.length < 3) return { ok: false, message: "Give it a name people will recognise." };
+  if (name.length > 60) return { ok: false, message: "That name is too long." };
+
+  const open = await db
+    .select({ id: communityRequests.id })
+    .from(communityRequests)
+    .where(
+      and(eq(communityRequests.requesterId, account.id), eq(communityRequests.status, "pending")),
+    );
+  if (open.length >= 2)
+    return { ok: false, message: "You already have requests waiting. Hang on for those first." };
+
+  await db.insert(communityRequests).values({
+    id: newId("creq"),
+    requesterId: account.id,
+    name,
+    location: input.location?.trim().slice(0, 80) || null,
+    description: input.description?.trim().slice(0, 500) || null,
+    details: input.details?.trim().slice(0, 1000) || null,
+    status: "pending",
+    createdAt: new Date(),
+  });
+  touch();
+  return { ok: true };
+}
+
+export async function withdrawCommunityRequest(requestId: string): Promise<Result> {
+  const account = await member();
+  if (!account) return { ok: false, message: "Not allowed" };
+  await db
+    .update(communityRequests)
+    .set({ status: "withdrawn", decidedAt: new Date() })
+    .where(
+      and(
+        eq(communityRequests.id, requestId),
+        eq(communityRequests.requesterId, account.id),
+        eq(communityRequests.status, "pending"),
+      ),
+    );
+  touch();
+  return { ok: true };
+}
+
+/**
+ * The platform's one decision about a community: whether it exists.
+ *
+ * Approval creates it with the requester as its only owner and nothing else
+ * — no venues, no members, no settings chosen for them. From that moment it
+ * is theirs.
+ */
+export async function decideCommunityRequest(
+  requestId: string,
+  decision: "approve" | "decline",
+  note?: string,
+): Promise<Result & { slug?: string }> {
   const account = await currentAccount();
   if (!isPlatformAdmin(account)) return { ok: false, message: "Not allowed" };
 
-  const name = input.name.trim().replace(/\s+/g, " ");
-  if (name.length < 2) return { ok: false, message: "Give the community a name" };
-  if (name.length > 60) return { ok: false, message: "That name is too long" };
-
-  const pin = (input.staffPin ?? "").trim() || String(Math.floor(100000 + Math.random() * 900000));
-  if (!/^\d{4,8}$/.test(pin)) return { ok: false, message: "PIN must be 4 to 8 digits" };
-
-  // A community with no organizer is a community nobody can run, so the
-  // appointment happens in the same step rather than being something to
-  // remember afterwards.
-  const organizerName = (input.organizerName ?? "").trim();
-  const organizerEmail = normalizeEmail(input.organizerEmail ?? "");
-  if (!organizerName) return { ok: false, message: "Name the organizer who will run it" };
-  if (!LOOKS_LIKE_EMAIL.test(organizerEmail))
-    return { ok: false, message: "The organizer needs a real email address — it is how they sign in" };
-
-  const taken = await db.select({ slug: groups.slug }).from(groups);
-  const slug = uniqueSlug(name, taken.map((g) => g.slug));
+  const [req] = await db.select().from(communityRequests).where(eq(communityRequests.id, requestId));
+  if (!req || req.status !== "pending") return { ok: false, message: "Already decided." };
 
   const now = new Date();
-  const organizerId = await upsertAccountUser(organizerName, organizerEmail);
-  if (!organizerId.ok) return organizerId;
+  if (decision === "decline") {
+    await db
+      .update(communityRequests)
+      .set({
+        status: "declined",
+        decidedAt: now,
+        decidedBy: account!.id,
+        decisionNote: note?.trim().slice(0, 300) || null,
+      })
+      .where(eq(communityRequests.id, requestId));
+    touch();
+    return { ok: true };
+  }
 
+  const taken = await db.select({ slug: groups.slug }).from(groups);
+  const slug = uniqueSlug(req.name, taken.map((g) => g.slug));
   const groupId = newId("grp");
+
   await db.insert(groups).values({
     id: groupId,
-    name,
+    name: req.name,
     slug,
-    ownerId: organizerId.id!,
-    location: input.location?.trim() || null,
-    description: input.description?.trim() || null,
-    visibility: input.visibility === "public" ? "public" : "private",
+    ownerId: req.requesterId,
+    location: req.location,
+    description: req.description,
+    visibility: "private",
     inviteCode: await freshInviteCode(),
-    defaultFee: Number.isFinite(input.defaultFee) ? Math.max(0, input.defaultFee!) : 40,
-    currency: (input.currency ?? "AED").trim().toUpperCase().slice(0, 4) || "AED",
+    defaultFee: 40,
+    currency: "AED",
     settings: {
-      staffPin: pin,
+      // A random PIN the owner can change; never a default anyone could guess.
+      staffPin: String(100000 + (randomBytes(4).readUInt32BE() % 900000)),
       pointsTo: 30,
       defaultGameType: "balanced",
       weights: { ...DEFAULT_WEIGHTS, balance: BALANCE_BY_TYPE.balanced },
       requireScoreConfirmation: false,
-      joinPolicy: input.joinPolicy ?? "approval",
+      joinPolicy: "approval",
     },
     createdAt: now,
   });
@@ -123,85 +218,69 @@ export async function createCommunity(input: {
   await db.insert(groupMembers).values({
     id: newId("gm"),
     groupId,
-    userId: organizerId.id!,
-    role: "organizer",
+    userId: req.requesterId,
+    role: "owner",
     status: "active",
     joinedAt: now,
   });
+
+  await db
+    .update(communityRequests)
+    .set({
+      status: "approved",
+      decidedAt: now,
+      decidedBy: account!.id,
+      groupId,
+      decisionNote: note?.trim().slice(0, 300) || null,
+    })
+    .where(eq(communityRequests.id, requestId));
 
   touch();
   return { ok: true, id: groupId, slug };
 }
 
 /**
- * Finds the person behind an email address, or makes them.
- *
- * Attaching the address to an existing player rather than creating a second
- * row is the whole point: rating, games played, partner history and fairness
- * all key off one user id, and splitting a person in two corrupts every one
- * of them silently.
+ * Hides a community that is being used for something it should not be.
+ * Touches nothing inside it — no members, no data — and can be undone.
  */
-async function upsertAccountUser(name: string, email: string): Promise<Result> {
-  const now = new Date();
-  const [identity] = await db.select().from(authEmails).where(eq(authEmails.email, email));
-  if (identity) return { ok: true, id: identity.userId };
-
-  // No sign-in address yet, but the person may already exist as a player who
-  // handed over a contact address at some point.
-  const [byContact] = await db.select().from(users).where(eq(users.email, email));
-  const userId = byContact?.id ?? newId("usr");
-
-  if (!byContact) {
-    await db.insert(users).values({
-      id: userId,
-      name,
-      email,
-      avatarColor: colorFor(name),
-      rating: 1200,
-      createdAt: now,
-    });
-  }
-
-  await db
-    .insert(authEmails)
-    .values({ id: newId("aem"), userId, email, createdAt: now });
-
-  return { ok: true, id: userId };
-}
-
-async function freshInviteCode(): Promise<string> {
-  // The alphabet is 34 characters and the code is eight of them, so a
-  // collision is vanishingly unlikely — but "vanishingly" is not "never", and
-  // the unique index would otherwise turn it into a 500.
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const code = mintInviteCode();
-    const [clash] = await db.select({ id: groups.id }).from(groups).where(eq(groups.inviteCode, code));
-    if (!clash) return code;
-  }
-  return `${mintInviteCode()}${Date.now().toString(36).toUpperCase().slice(-2)}`;
-}
-
-export async function archiveCommunity(groupId: string, archived: boolean): Promise<Result> {
+export async function suspendCommunity(groupId: string, suspended: boolean): Promise<Result> {
   if (!isPlatformAdmin(await currentAccount())) return { ok: false, message: "Not allowed" };
   await db
     .update(groups)
-    .set({ archivedAt: archived ? new Date() : null })
+    .set({ archivedAt: suspended ? new Date() : null })
     .where(eq(groups.id, groupId));
   touch();
   return { ok: true };
 }
 
-/* ------------------------------------------------- community: the basics */
+/* ---------------------------------------------------------- ownership */
 
+/** Records that the owner read the ownership notice. */
+export async function acceptOwnership(groupId: string): Promise<Result> {
+  if (!canOwn(await currentAccount(), groupId)) return { ok: false, message: "Not allowed" };
+  await db
+    .update(groups)
+    .set({ ownerAcceptedAt: new Date() })
+    .where(and(eq(groups.id, groupId), isNull(groups.ownerAcceptedAt)));
+  touch();
+  return { ok: true };
+}
+
+/** Who can find it, and what the directory says about it. The owner's call. */
 export async function setCommunityProfile(
   groupId: string,
-  patch: { description?: string; visibility?: Visibility },
+  patch: { description?: string; visibility?: Visibility; previewSchedule?: boolean },
 ): Promise<Result> {
-  if (!canOrganize(await currentAccount(), groupId)) return { ok: false, message: "Not allowed" };
+  if (!canOwn(await currentAccount(), groupId)) return { ok: false, message: "Only an owner can change that." };
+  const group = await liveGroup(groupId);
+  if (!group) return { ok: false, message: "Community not found" };
 
   const next: Record<string, unknown> = {};
-  if (patch.description !== undefined) next.description = patch.description.trim().slice(0, 500) || null;
+  if (patch.description !== undefined)
+    next.description = patch.description.trim().slice(0, 500) || null;
   if (patch.visibility) next.visibility = patch.visibility === "public" ? "public" : "private";
+  if (patch.previewSchedule !== undefined)
+    next.settings = { ...group.settings, previewSchedule: patch.previewSchedule };
   if (Object.keys(next).length) await db.update(groups).set(next).where(eq(groups.id, groupId));
 
   touch();
@@ -209,11 +288,108 @@ export async function setCommunityProfile(
 }
 
 /**
- * Replaces the shareable code.
+ * Changes somebody's role. Owners only, for every role — "who runs this" is
+ * precisely the decision that makes a community theirs.
  *
- * Worth having as a button rather than a support request: an invite code
- * lives in a WhatsApp group forever, people leave that group, and the only
- * honest answer to "can you stop that code working" is a new one.
+ * The last owner cannot be demoted or removed. With no platform rescue, a
+ * community with no owner is one nobody can ever manage again.
+ */
+export async function changeRole(membershipId: string, role: MemberRole): Promise<Result> {
+  if (!["player", "coordinator", "organizer", "owner"].includes(role))
+    return { ok: false, message: "Unknown role" };
+
+  const [row] = await db.select().from(groupMembers).where(eq(groupMembers.id, membershipId));
+  if (!row) return { ok: false, message: "Not found" };
+  if (!canOwn(await currentAccount(), row.groupId))
+    return { ok: false, message: "Only an owner can change roles." };
+  if (row.status !== "active") return { ok: false, message: "Only active members can hold a role." };
+
+  if (row.role === "owner" && role !== "owner" && (await ownerCount(row.groupId)) <= 1)
+    return { ok: false, message: "That is the only owner. Make someone else an owner first." };
+
+  await db.update(groupMembers).set({ role }).where(eq(groupMembers.id, membershipId));
+  touch();
+  return { ok: true };
+}
+
+/**
+ * Removes a member (or brings them back). Organizers can remove players and
+ * coordinators; only an owner can remove an organizer or another owner, and
+ * nobody can remove the last owner.
+ */
+export async function setMembership(membershipId: string, active: boolean): Promise<Result> {
+  const [row] = await db.select().from(groupMembers).where(eq(groupMembers.id, membershipId));
+  if (!row) return { ok: false, message: "Not found" };
+  const account = await currentAccount();
+  const senior = row.role === "organizer" || row.role === "owner";
+  if (senior ? !canOwn(account, row.groupId) : !canOrganize(account, row.groupId))
+    return { ok: false, message: "Not allowed" };
+  if (!active && row.role === "owner" && (await ownerCount(row.groupId)) <= 1)
+    return { ok: false, message: "The only owner can't be removed." };
+
+  await db
+    .update(groupMembers)
+    .set({ status: active ? "active" : "inactive" })
+    .where(eq(groupMembers.id, membershipId));
+  touch();
+  return { ok: true };
+}
+
+/**
+ * Deletes the community. Everyone loses sight of it at once; an owner can
+ * bring it back for 30 days; after that it is purged for good.
+ *
+ * The name has to be typed to confirm. With no platform rescue, this is the
+ * one button in the app that nobody can undo on the owner's behalf.
+ */
+export async function deleteCommunity(groupId: string, typedName: string): Promise<Result> {
+  const account = await currentAccount();
+  if (!canOwn(account, groupId)) return { ok: false, message: "Only an owner can delete it." };
+  const group = await liveGroup(groupId);
+  if (!group) return { ok: false, message: "Community not found" };
+  if (typedName.trim().toLowerCase() !== group.name.trim().toLowerCase())
+    return { ok: false, message: "Type the community's name exactly to confirm." };
+
+  await db
+    .update(groups)
+    .set({ deletedAt: new Date(), deletedBy: account!.id })
+    .where(eq(groups.id, groupId));
+  touch();
+  return { ok: true };
+}
+
+/**
+ * Brings a deleted community back within its recovery window. Checked against
+ * the membership row directly, because a deleted community is invisible to
+ * the usual membership lookups.
+ */
+export async function restoreCommunity(groupId: string): Promise<Result> {
+  const account = await currentAccount();
+  if (!account) return { ok: false, message: "Not allowed" };
+
+  const [row] = await db
+    .select({ role: groupMembers.role, status: groupMembers.status })
+    .from(groupMembers)
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, account.id)));
+  if (!row || row.role !== "owner" || row.status !== "active")
+    return { ok: false, message: "Only an owner can restore it." };
+
+  const [group] = await db.select().from(groups).where(eq(groups.id, groupId));
+  if (!group?.deletedAt) return { ok: false, message: "It isn't deleted." };
+  const deadline = group.deletedAt.getTime() + RECOVERY_DAYS * 86_400_000;
+  if (Date.now() > deadline) return { ok: false, message: "The recovery window has closed." };
+
+  await db.update(groups).set({ deletedAt: null, deletedBy: null }).where(eq(groups.id, groupId));
+  touch();
+  return { ok: true };
+}
+
+/* ------------------------------------------------------- the day to day */
+
+/**
+ * Replaces the shareable code. A code lives in chat history forever and
+ * people leave; the only honest answer to "can you stop that code working"
+ * is a new one.
  */
 export async function rotateInviteCode(groupId: string): Promise<Result> {
   if (!canOrganize(await currentAccount(), groupId)) return { ok: false, message: "Not allowed" };
@@ -223,122 +399,79 @@ export async function rotateInviteCode(groupId: string): Promise<Result> {
   return { ok: true, message: code };
 }
 
-/* ------------------------------------------------------------ organizers */
+type InviteResult = Result & { url?: string; delivered?: boolean };
 
 /**
- * Appoints somebody to run a community.
+ * Invites one person — by email, by player number, or as a bare link.
  *
- * Open to platform admins and to the community's existing organizers. An
- * organizer who cannot hand the job to a co-organizer is one holiday away
- * from being a single point of failure.
- */
-export async function appointOrganizer(
-  groupId: string,
-  name: string,
-  email: string,
-  role: MemberRole = "organizer",
-): Promise<Result> {
-  const account = await currentAccount();
-  if (!canOrganize(account, groupId)) return { ok: false, message: "Not allowed" };
-
-  const clean = name.trim().replace(/\s+/g, " ");
-  const address = normalizeEmail(email);
-  if (clean.length < 2) return { ok: false, message: "Who is it?" };
-  if (!LOOKS_LIKE_EMAIL.test(address))
-    return { ok: false, message: "An organizer needs an email address — it is how they sign in" };
-  if (role !== "organizer" && role !== "coordinator")
-    return { ok: false, message: "Unknown role" };
-
-  const person = await upsertAccountUser(clean, address);
-  if (!person.ok || !person.id) return person;
-
-  const [existing] = await db
-    .select()
-    .from(groupMembers)
-    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, person.id)));
-
-  if (existing) {
-    await db
-      .update(groupMembers)
-      .set({ role, status: "active" })
-      .where(eq(groupMembers.id, existing.id));
-  } else {
-    await db.insert(groupMembers).values({
-      id: newId("gm"),
-      groupId,
-      userId: person.id,
-      role,
-      status: "active",
-      joinedAt: new Date(),
-    });
-  }
-
-  touch();
-  return { ok: true, id: person.id };
-}
-
-/**
- * Takes the job away, leaving the person in the community as a player.
+ * An invitation is the organizer vouching for someone, so accepting it skips
+ * the join queue. Inviting somebody *to run things* is an ownership decision,
+ * so any role above player needs an owner.
  *
- * Refuses to remove the last one. A community with no organizer cannot add a
- * venue, run a night or approve a member, and the only way out would be a
- * platform admin noticing.
- */
-export async function stepDownOrganizer(groupId: string, membershipId: string): Promise<Result> {
-  const account = await currentAccount();
-  if (!canOrganize(account, groupId)) return { ok: false, message: "Not allowed" };
-
-  const [member] = await db.select().from(groupMembers).where(eq(groupMembers.id, membershipId));
-  if (!member || member.groupId !== groupId) return { ok: false, message: "Not found" };
-  if (member.role !== "organizer") {
-    await db.update(groupMembers).set({ role: "player" }).where(eq(groupMembers.id, membershipId));
-    touch();
-    return { ok: true };
-  }
-
-  const [{ n }] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(groupMembers)
-    .where(
-      and(
-        eq(groupMembers.groupId, groupId),
-        eq(groupMembers.role, "organizer"),
-        eq(groupMembers.status, "active"),
-      ),
-    );
-  if (n <= 1)
-    return { ok: false, message: "That is the only organizer. Appoint another one first." };
-
-  await db.update(groupMembers).set({ role: "player" }).where(eq(groupMembers.id, membershipId));
-  touch();
-  return { ok: true };
-}
-
-/* --------------------------------------------------------------- invites */
-
-/**
- * Invites one named person.
- *
- * Distinct from the shareable code on purpose: the organizer has named this
- * person in advance, so accepting is the approval and there is nothing left
- * to wait for — even in a community that vets everybody else.
+ * By player number it goes to that person's own inbox in the app and only
+ * they can accept it. The inviter is never told whose number it was — a
+ * number is a name tag, and it must not become a way to look people up.
  */
 export async function createInvite(
   groupId: string,
-  input: { email?: string; name?: string; role?: MemberRole },
+  input: { email?: string; name?: string; role?: MemberRole; playerNo?: string },
 ): Promise<InviteResult> {
   const account = await currentAccount();
-  if (!canOrganize(account, groupId)) return { ok: false, message: "Not allowed" };
+  const role: MemberRole =
+    input.role === "coordinator" || input.role === "organizer" || input.role === "owner"
+      ? input.role
+      : "player";
+  if (role === "player" ? !canOrganize(account, groupId) : !canOwn(account, groupId))
+    return {
+      ok: false,
+      message: role === "player" ? "Not allowed" : "Only an owner can invite someone to help run it.",
+    };
 
-  const [group] = await db.select().from(groups).where(eq(groups.id, groupId));
+  const group = await liveGroup(groupId);
   if (!group) return { ok: false, message: "Community not found" };
 
   const email = input.email?.trim() ? normalizeEmail(input.email) : null;
   if (email && !LOOKS_LIKE_EMAIL.test(email))
-    return { ok: false, message: "That doesn't look like an email address" };
+    return { ok: false, message: "That doesn't look like an email address." };
 
-  const role: MemberRole =
-    input.role === "coordinator" || input.role === "organizer" ? input.role : "player";
+  let targetId: string | null = null;
+  const rawNo = (input.playerNo ?? "").replace(/\D/g, "");
+  if (rawNo) {
+    const [target] = await db.select().from(users).where(eq(users.playerNo, Number(rawNo)));
+    // Same reply whether or not the number exists or is registered, so the
+    // form can't be used to find out who has an account.
+    const neutral: InviteResult = {
+      ok: true,
+      message: `If player #${rawNo} has an account, the invitation is waiting in their app.`,
+    };
+    if (!target) return neutral;
+    const [member] = await db
+      .select()
+      .from(groupMembers)
+      .where(
+        and(
+          eq(groupMembers.groupId, groupId),
+          eq(groupMembers.userId, target.id),
+          eq(groupMembers.status, "active"),
+        ),
+      );
+    if (member) return neutral;
+    targetId = target.id;
+    await db.insert(groupInvites).values({
+      id: newId("inv"),
+      groupId,
+      email: null,
+      name: null,
+      tokenHash: hash(mintToken()),
+      role,
+      invitedBy: account!.id,
+      userId: targetId,
+      expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+      createdAt: new Date(),
+    });
+    touch();
+    return neutral;
+  }
 
   const token = mintToken();
   const now = new Date();
@@ -349,19 +482,15 @@ export async function createInvite(
     name: input.name?.trim().slice(0, 60) || null,
     tokenHash: hash(token),
     role,
-    invitedBy: account?.id ?? null,
+    invitedBy: account!.id,
     expiresAt: new Date(now.getTime() + INVITE_TTL_MS),
     createdAt: now,
   });
 
   const url = `${await requestOrigin()}/i/${token}`;
-
-  // The link is returned either way. Most of these will travel by WhatsApp
-  // whatever the mail provider does, and an organizer standing in a hall
-  // should not have to find out whether Resend is configured.
   let delivered = false;
   if (email) {
-    const sent = await sendInvite(email, url, group.name, account?.name ?? "An organizer", input.name);
+    const sent = await sendInvite(email, url, group.name, account!.name, input.name);
     delivered = sent.delivered;
   }
 
@@ -379,54 +508,86 @@ export async function revokeInvite(groupId: string, inviteId: string): Promise<R
   return { ok: true };
 }
 
-/** Reads an invitation without spending it, so the page can show what it is. */
-export async function inspectInvite(token: string): Promise<InviteView | null> {
-  const [invite] = await db
-    .select()
-    .from(groupInvites)
-    .where(eq(groupInvites.tokenHash, hash(token)));
-  if (!invite) return null;
-  if (invite.acceptedAt || invite.revokedAt || invite.expiresAt.getTime() < Date.now()) return null;
+/* ------------------------------------------------------ asking for more */
 
-  const [group] = await db.select().from(groups).where(eq(groups.id, invite.groupId));
-  if (!group || group.archivedAt) return null;
+/**
+ * A member asking to help run their community. Goes to its owners and no one
+ * else.
+ */
+export async function requestRole(groupId: string, role: MemberRole, note?: string): Promise<Result> {
+  const account = await member();
+  if (!account) return { ok: false, message: "Sign in first." };
+  if (role !== "organizer" && role !== "coordinator") return { ok: false, message: "Unknown role" };
 
-  const userId = await currentUserId();
-  let alreadyIn = false;
-  if (userId) {
-    const [member] = await db
-      .select()
-      .from(groupMembers)
+  const mine = account.memberships.find((m) => m.groupId === groupId);
+  if (!mine) return { ok: false, message: "Join the community first." };
+  if (mine.role === "owner" || mine.role === role || (mine.role === "organizer" && role === "coordinator"))
+    return { ok: false, message: "You already have that." };
+
+  const [open] = await db
+    .select({ id: roleRequests.id })
+    .from(roleRequests)
+    .where(
+      and(
+        eq(roleRequests.groupId, groupId),
+        eq(roleRequests.userId, account.id),
+        eq(roleRequests.status, "pending"),
+      ),
+    );
+  if (open) return { ok: false, message: "Your request is already with the owner." };
+
+  await db.insert(roleRequests).values({
+    id: newId("rreq"),
+    groupId,
+    userId: account.id,
+    role,
+    note: note?.trim().slice(0, 300) || null,
+    status: "pending",
+    createdAt: new Date(),
+  });
+  touch();
+  return { ok: true };
+}
+
+export async function decideRoleRequest(
+  requestId: string,
+  decision: "approve" | "decline",
+): Promise<Result> {
+  const [req] = await db.select().from(roleRequests).where(eq(roleRequests.id, requestId));
+  if (!req || req.status !== "pending") return { ok: false, message: "Already decided." };
+  const account = await currentAccount();
+  if (!canOwn(account, req.groupId)) return { ok: false, message: "Only an owner can decide." };
+
+  if (decision === "approve") {
+    await db
+      .update(groupMembers)
+      .set({ role: req.role })
       .where(
         and(
-          eq(groupMembers.groupId, invite.groupId),
-          eq(groupMembers.userId, userId),
+          eq(groupMembers.groupId, req.groupId),
+          eq(groupMembers.userId, req.userId),
           eq(groupMembers.status, "active"),
         ),
       );
-    alreadyIn = Boolean(member);
   }
-
-  return {
-    token,
-    groupId: group.id,
-    groupName: group.name,
-    slug: group.slug,
-    role: invite.role,
-    name: invite.name,
-    alreadyIn,
-  };
+  await db
+    .update(roleRequests)
+    .set({
+      status: decision === "approve" ? "approved" : "declined",
+      decidedAt: new Date(),
+      decidedBy: account!.id,
+    })
+    .where(eq(roleRequests.id, requestId));
+  touch();
+  return { ok: true };
 }
 
-/* ------------------------------------------------------------- accepting */
+/* ------------------------------------------------------------ joining */
 
 /**
- * Puts somebody into a community.
- *
- * One place, whichever door they came through, because the two doors differ
- * only in what status the membership starts at. Keeping them in one function
- * means an invitation and a join request can never drift into disagreeing
- * about what "in" means.
+ * Puts somebody into a community. One function whichever door they came in
+ * by, so an invitation and a join request can never disagree about what "in"
+ * means.
  */
 async function place(
   groupId: string,
@@ -450,7 +611,7 @@ async function place(
       .set({
         status,
         // An invitation outranks whatever they were before, including a
-        // previous decline: the organizer has just said yes in advance.
+        // previous decline: the organizer has said yes in advance.
         role: status === "active" ? role : existing.role,
         note: note ?? existing.note,
         requestedAt: status === "pending" ? now : existing.requestedAt,
@@ -475,201 +636,145 @@ async function place(
   return { ok: true, id };
 }
 
-/**
- * Resolves who is accepting: the identity already on this phone, or a new
- * person typing their name for the first time.
- *
- * The duplicate-name guard from self-registration applies here too. Somebody
- * who is already on the roster and types their own name into an invite must
- * end up as themselves, not as a second record carrying none of their games.
- */
-async function resolveJoiner(
-  groupId: string,
-  typedName?: string,
-): Promise<Result & { duplicate?: { id: string; name: string } }> {
-  const existingId = await currentUserId();
-  if (existingId) {
-    const [user] = await db.select().from(users).where(eq(users.id, existingId));
-    if (user) return { ok: true, id: user.id };
-  }
+/** Reads an invitation without spending it, so the page can show what it is. */
+export async function inspectInvite(token: string): Promise<InviteView | null> {
+  const [invite] = await db.select().from(groupInvites).where(eq(groupInvites.tokenHash, hash(token)));
+  if (!invite || invite.userId) return null;
+  if (invite.acceptedAt || invite.revokedAt || invite.expiresAt.getTime() < Date.now()) return null;
 
-  const clean = (typedName ?? "").trim().replace(/\s+/g, " ");
-  if (clean.length < 2) return { ok: false, message: "Please enter your name" };
-  if (clean.length > 40) return { ok: false, message: "That name is too long" };
+  const group = await liveGroup(invite.groupId);
+  if (!group) return null;
 
-  const roster = await db
-    .select({ id: users.id, name: users.name })
-    .from(users)
-    .innerJoin(groupMembers, eq(groupMembers.userId, users.id))
-    .where(eq(groupMembers.groupId, groupId));
+  const account = await currentAccount();
+  const alreadyIn = Boolean(account?.memberships.some((m) => m.groupId === invite.groupId));
 
-  const key = nameKey(clean);
-  const clash = roster.find((u) => nameKey(u.name) === key);
-  if (clash)
-    return {
-      ok: false,
-      message: `${clash.name} is already on the list.`,
-      duplicate: { id: clash.id, name: clash.name },
-    };
-
-  const userId = newId("usr");
-  await db.insert(users).values({
-    id: userId,
-    name: clean,
-    avatarColor: colorFor(clean),
-    rating: 1200,
-    createdAt: new Date(),
-  });
-  return { ok: true, id: userId };
+  return {
+    token,
+    groupId: group.id,
+    groupName: group.name,
+    slug: group.slug,
+    role: invite.role,
+    name: invite.name,
+    alreadyIn,
+  };
 }
 
-export async function acceptInvite(token: string, name?: string): Promise<Result> {
-  const [invite] = await db
-    .select()
-    .from(groupInvites)
-    .where(eq(groupInvites.tokenHash, hash(token)));
-  if (!invite) return { ok: false, message: "That invitation is not valid." };
+async function spend(inviteId: string, groupId: string, userId: string, role: MemberRole) {
+  await place(groupId, userId, "active", role);
+  await db
+    .update(groupInvites)
+    .set({ acceptedAt: new Date(), acceptedBy: userId })
+    .where(eq(groupInvites.id, inviteId));
+  await setActiveCommunity(groupId);
+  touch();
+}
+
+/** A link invitation. Whoever holds the link and has an account can accept, once. */
+export async function acceptInvite(token: string): Promise<Result> {
+  const account = await member();
+  if (!account) return { ok: false, message: "Sign in first." };
+
+  const [invite] = await db.select().from(groupInvites).where(eq(groupInvites.tokenHash, hash(token)));
+  if (!invite || invite.userId) return { ok: false, message: "That invitation is not valid." };
   if (invite.revokedAt) return { ok: false, message: "That invitation was withdrawn." };
   if (invite.acceptedAt) return { ok: false, message: "That invitation has already been used." };
   if (invite.expiresAt.getTime() < Date.now())
     return { ok: false, message: "That invitation has expired. Ask for a fresh one." };
+  if (!(await liveGroup(invite.groupId))) return { ok: false, message: "That community is closed." };
 
-  const [group] = await db.select().from(groups).where(eq(groups.id, invite.groupId));
-  if (!group || group.archivedAt) return { ok: false, message: "That community is closed." };
-
-  const joiner = await resolveJoiner(invite.groupId, name);
-  if (!joiner.ok || !joiner.id) return joiner;
-
-  await place(invite.groupId, joiner.id, "active", invite.role);
-
-  // Single use. Two people sharing one personal invitation would give the
-  // second one a membership the organizer never agreed to.
-  await db
-    .update(groupInvites)
-    .set({ acceptedAt: new Date(), acceptedBy: joiner.id })
-    .where(eq(groupInvites.id, invite.id));
-
-  // An invited organizer signs in by email; the address they were invited at
-  // is the one that should reach this account.
-  if (invite.email && invite.role !== "player") {
-    const [taken] = await db.select().from(authEmails).where(eq(authEmails.email, invite.email));
-    if (!taken)
-      await db.insert(authEmails).values({
-        id: newId("aem"),
-        userId: joiner.id,
-        email: invite.email,
-        createdAt: new Date(),
-      });
-  }
-
-  await setCurrentUserId(joiner.id);
-  await setActiveCommunity(invite.groupId);
-  touch();
+  await spend(invite.id, invite.groupId, account.id, invite.role);
   return { ok: true, id: invite.groupId };
 }
 
-type JoinOutcome = Result & {
-  status?: "joined" | "waiting" | "already";
-  slug?: string;
-  duplicate?: { id: string; name: string };
-};
+/** An in-app invitation addressed to this account by player number. */
+export async function answerInvite(inviteId: string, accept: boolean): Promise<Result> {
+  const account = await member();
+  if (!account) return { ok: false, message: "Sign in first." };
 
-/**
- * The shareable-code door.
- *
- * Unlike an invitation this hands the newcomer straight to the community's
- * join policy, because a code pasted into a WhatsApp group is not the
- * organizer vouching for whoever ends up holding it.
- */
-export async function joinWithCode(
-  code: string,
-  name?: string,
-  note?: string,
-): Promise<JoinOutcome> {
+  const [invite] = await db
+    .select()
+    .from(groupInvites)
+    .where(
+      and(
+        eq(groupInvites.id, inviteId),
+        eq(groupInvites.userId, account.id),
+        isNull(groupInvites.acceptedAt),
+        isNull(groupInvites.revokedAt),
+        gt(groupInvites.expiresAt, new Date()),
+      ),
+    );
+  if (!invite) return { ok: false, message: "That invitation is no longer open." };
+
+  if (!accept) {
+    await db.update(groupInvites).set({ revokedAt: new Date() }).where(eq(groupInvites.id, invite.id));
+    touch();
+    return { ok: true };
+  }
+  if (!(await liveGroup(invite.groupId))) return { ok: false, message: "That community is closed." };
+  await spend(invite.id, invite.groupId, account.id, invite.role);
+  return { ok: true, id: invite.groupId };
+}
+
+type JoinOutcome = Result & { status?: "joined" | "waiting" | "already"; slug?: string };
+
+/** The shareable-code door: follows the community's join policy. */
+export async function joinWithCode(code: string, note?: string): Promise<JoinOutcome> {
   const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (clean.length < 4) return { ok: false, message: "Check the code and try again." };
 
   const [group] = await db.select().from(groups).where(eq(groups.inviteCode, clean));
-  if (!group || group.archivedAt)
+  if (!group || group.archivedAt || group.deletedAt)
     return { ok: false, message: "No community has that code. Check it with whoever sent it." };
 
-  return joinCommunity(group.id, name, note);
+  return joinCommunity(group.id, note);
 }
 
-/** The directory door: a public community the person found and asked to join. */
-export async function joinCommunity(
-  groupId: string,
-  name?: string,
-  note?: string,
-): Promise<JoinOutcome> {
-  const [group] = await db.select().from(groups).where(eq(groups.id, groupId));
-  if (!group || group.archivedAt) return { ok: false, message: "That community is closed." };
+/** The directory door: a community the person found and asked to join. */
+export async function joinCommunity(groupId: string, note?: string): Promise<JoinOutcome> {
+  const account = await member();
+  if (!account) return { ok: false, message: "Sign in first." };
+
+  const group = await liveGroup(groupId);
+  if (!group) return { ok: false, message: "That community is closed." };
 
   const policy = joinPolicyOf(group.settings);
   if (policy === "closed")
     return {
       ok: false,
-      message: "This community adds members by invitation only. Ask the organizer for a link.",
+      message: "This community adds members by invitation only. Ask the organizer.",
     };
-
-  const joiner = await resolveJoiner(groupId, name);
-  if (!joiner.ok || !joiner.id) return joiner;
 
   const placed = await place(
     groupId,
-    joiner.id,
+    account.id,
     policy === "open" ? "active" : "pending",
     "player",
     note?.trim().slice(0, 300) || null,
   );
   if (!placed.ok) return placed;
 
-  // Remembered on this phone either way. A pending member still needs the app
-  // to know who they are, so the waiting screen is theirs, and so approval
-  // does not make them introduce themselves all over again.
-  await setCurrentUserId(joiner.id);
   await setActiveCommunity(groupId);
   touch();
 
   const status =
-    placed.message === "already"
-      ? "already"
-      : policy === "open"
-        ? "joined"
-        : "waiting";
+    placed.message === "already" ? "already" : policy === "open" ? "joined" : "waiting";
   return { ok: true, status, slug: group.slug };
 }
 
-/** Leaves. The membership row stays so history and ratings survive. */
+/** Leaves. The row stays so history and ratings survive. */
 export async function leaveCommunity(groupId: string): Promise<Result> {
-  const userId = await currentUserId();
-  if (!userId) return { ok: false, message: "Nobody is signed in on this phone." };
+  const account = await member();
+  if (!account) return { ok: false, message: "Sign in first." };
 
-  const [member] = await db
+  const [row] = await db
     .select()
     .from(groupMembers)
-    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
-  if (!member) return { ok: false, message: "You are not in that community." };
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, account.id)));
+  if (!row) return { ok: false, message: "You are not in that community." };
+  if (row.role === "owner" && (await ownerCount(groupId)) <= 1)
+    return { ok: false, message: "You're the only owner. Make someone else an owner, or delete it." };
 
-  if (member.role === "organizer") {
-    const [{ n }] = await db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(groupMembers)
-      .where(
-        and(
-          eq(groupMembers.groupId, groupId),
-          eq(groupMembers.role, "organizer"),
-          eq(groupMembers.status, "active"),
-        ),
-      );
-    if (n <= 1)
-      return { ok: false, message: "You are the only organizer. Appoint another one first." };
-  }
-
-  await db
-    .update(groupMembers)
-    .set({ status: "inactive" })
-    .where(eq(groupMembers.id, member.id));
+  await db.update(groupMembers).set({ status: "inactive" }).where(eq(groupMembers.id, row.id));
   touch();
   return { ok: true };
 }
@@ -677,85 +782,78 @@ export async function leaveCommunity(groupId: string): Promise<Result> {
 /* ------------------------------------------------------- form wrappers */
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
-const num = (fd: FormData, k: string, fallback = 0) => {
-  const v = Number(fd.get(k));
-  return Number.isFinite(v) ? v : fallback;
-};
 
 export async function switchCommunityAction(fd: FormData) {
   const groupId = str(fd, "groupId");
   const account = await currentAccount();
-
-  // The cookie only selects among communities this browser already belongs
-  // to, so this is the one place that check has to hold.
-  const mine = await db
-    .select({ id: groupMembers.id })
-    .from(groupMembers)
-    .where(
-      and(
-        eq(groupMembers.groupId, groupId),
-        inArray(
-          groupMembers.userId,
-          [account?.id, await currentUserId()].filter(Boolean) as string[],
-        ),
-        eq(groupMembers.status, "active"),
-      ),
-    );
-
-  if (mine.length === 0 && !isPlatformAdmin(account)) return;
+  // Only ever a choice among communities this account belongs to.
+  if (!account?.memberships.some((m) => m.groupId === groupId)) return;
   await setActiveCommunity(groupId);
-  const next = str(fd, "next");
-  redirect(next || "/");
+  redirect(str(fd, "next") || "/");
 }
 
-export async function createCommunityAction(
+export async function requestCommunityAction(
   _prev: CommunityFormState,
   fd: FormData,
 ): Promise<CommunityFormState> {
-  const res = await createCommunity({
+  const res = await requestCommunity({
     name: str(fd, "name"),
     location: str(fd, "location"),
     description: str(fd, "description"),
-    visibility: str(fd, "visibility") === "public" ? "public" : "private",
-    joinPolicy: (str(fd, "joinPolicy") || "approval") as JoinPolicy,
-    currency: str(fd, "currency") || "AED",
-    defaultFee: num(fd, "defaultFee", 40),
-    staffPin: str(fd, "staffPin"),
-    organizerName: str(fd, "organizerName"),
-    organizerEmail: str(fd, "organizerEmail"),
+    details: str(fd, "details"),
   });
-  if (!res.ok) return { ok: false, message: res.message ?? "Could not create that community." };
-  return { ok: true, message: `Created. Its address is /c/${res.slug}` };
-}
-
-export async function archiveCommunityAction(fd: FormData) {
-  await archiveCommunity(str(fd, "groupId"), str(fd, "archived") === "1");
-}
-
-export async function appointOrganizerAction(
-  _prev: CommunityFormState,
-  fd: FormData,
-): Promise<CommunityFormState> {
-  const res = await appointOrganizer(
-    str(fd, "groupId"),
-    str(fd, "name"),
-    str(fd, "email"),
-    (str(fd, "role") || "organizer") as MemberRole,
-  );
   return res.ok
-    ? { ok: true, message: `${str(fd, "name")} can now sign in and run this community.` }
-    : { ok: false, message: res.message ?? "Could not appoint them." };
+    ? { ok: true, message: "Request sent. You'll see the answer on your profile." }
+    : { ok: false, message: res.message ?? "Could not send that." };
 }
 
-export async function stepDownOrganizerAction(fd: FormData) {
-  await stepDownOrganizer(str(fd, "groupId"), str(fd, "membershipId"));
+export async function withdrawCommunityRequestAction(fd: FormData) {
+  await withdrawCommunityRequest(str(fd, "requestId"));
+}
+
+export async function decideCommunityRequestAction(fd: FormData) {
+  await decideCommunityRequest(
+    str(fd, "requestId"),
+    str(fd, "decision") === "approve" ? "approve" : "decline",
+    str(fd, "note"),
+  );
+}
+
+export async function suspendCommunityAction(fd: FormData) {
+  await suspendCommunity(str(fd, "groupId"), str(fd, "suspended") === "1");
+}
+
+export async function acceptOwnershipAction(fd: FormData) {
+  await acceptOwnership(str(fd, "groupId"));
 }
 
 export async function communityProfileAction(fd: FormData) {
   await setCommunityProfile(str(fd, "groupId"), {
     description: str(fd, "description"),
     visibility: str(fd, "visibility") === "public" ? "public" : "private",
+    previewSchedule: str(fd, "previewSchedule") === "1",
   });
+}
+
+export async function changeRoleAction(fd: FormData) {
+  await changeRole(str(fd, "membershipId"), str(fd, "role") as MemberRole);
+}
+
+export async function setMembershipAction(fd: FormData) {
+  await setMembership(str(fd, "membershipId"), str(fd, "active") === "1");
+}
+
+export async function deleteCommunityAction(
+  _prev: CommunityFormState,
+  fd: FormData,
+): Promise<CommunityFormState> {
+  const res = await deleteCommunity(str(fd, "groupId"), str(fd, "confirmName"));
+  if (!res.ok) return { ok: false, message: res.message ?? "Could not delete it." };
+  redirect("/me");
+}
+
+export async function restoreCommunityAction(fd: FormData) {
+  await restoreCommunity(str(fd, "groupId"));
 }
 
 export async function rotateInviteCodeAction(fd: FormData) {
@@ -770,14 +868,16 @@ export async function createInviteAction(
     email: str(fd, "email"),
     name: str(fd, "name"),
     role: (str(fd, "role") || "player") as MemberRole,
+    playerNo: str(fd, "playerNo"),
   });
   if (!res.ok) return { ok: false, message: res.message ?? "Could not create that invitation." };
+  if (!res.url) return { ok: true, message: res.message ?? "Invitation sent." };
   return {
     ok: true,
     url: res.url,
     message: res.delivered
-      ? `Invitation emailed. The link below works too, if you'd rather send it yourself.`
-      : `Invitation ready. Send them this link — no email went out.`,
+      ? "Invitation emailed. The link below works too, if you'd rather send it yourself."
+      : "Invitation ready. Send them this link.",
   };
 }
 
@@ -785,38 +885,50 @@ export async function revokeInviteAction(fd: FormData) {
   await revokeInvite(str(fd, "groupId"), str(fd, "inviteId"));
 }
 
+export async function requestRoleAction(
+  _prev: CommunityFormState,
+  fd: FormData,
+): Promise<CommunityFormState> {
+  const res = await requestRole(str(fd, "groupId"), str(fd, "role") as MemberRole, str(fd, "note"));
+  return res.ok
+    ? { ok: true, message: "Sent to the owner." }
+    : { ok: false, message: res.message ?? "Could not send that." };
+}
+
+export async function decideRoleRequestAction(fd: FormData) {
+  await decideRoleRequest(str(fd, "requestId"), str(fd, "decision") === "approve" ? "approve" : "decline");
+}
+
 export async function acceptInviteAction(
   _prev: CommunityFormState,
   fd: FormData,
 ): Promise<CommunityFormState> {
-  const res = await acceptInvite(str(fd, "token"), str(fd, "name"));
+  const res = await acceptInvite(str(fd, "token"));
   if (!res.ok) return { ok: false, message: res.message ?? "That invitation did not work." };
   redirect("/");
 }
 
-export async function joinWithCodeAction(
-  _prev: JoinFormState,
-  fd: FormData,
-): Promise<JoinFormState> {
-  const res = await joinWithCode(str(fd, "code"), str(fd, "name"), str(fd, "note"));
-  if (!res.ok)
-    return { ok: false, message: res.message ?? "Could not join.", duplicate: res.duplicate };
+export async function answerInviteAction(fd: FormData) {
+  const accept = str(fd, "accept") === "1";
+  const res = await answerInvite(str(fd, "inviteId"), accept);
+  if (res.ok && accept) redirect("/");
+}
+
+export async function joinWithCodeAction(_prev: JoinFormState, fd: FormData): Promise<JoinFormState> {
+  const res = await joinWithCode(str(fd, "code"), str(fd, "note"));
+  if (!res.ok) return { ok: false, message: res.message ?? "Could not join." };
   if (res.status === "waiting") return { ok: true, status: "waiting" };
   redirect("/");
 }
 
-export async function joinCommunityAction(
-  _prev: JoinFormState,
-  fd: FormData,
-): Promise<JoinFormState> {
-  const res = await joinCommunity(str(fd, "groupId"), str(fd, "name"), str(fd, "note"));
-  if (!res.ok)
-    return { ok: false, message: res.message ?? "Could not join.", duplicate: res.duplicate };
+export async function joinCommunityAction(_prev: JoinFormState, fd: FormData): Promise<JoinFormState> {
+  const res = await joinCommunity(str(fd, "groupId"), str(fd, "note"));
+  if (!res.ok) return { ok: false, message: res.message ?? "Could not join." };
   if (res.status === "waiting") return { ok: true, status: "waiting" };
   redirect("/");
 }
 
 export async function leaveCommunityAction(fd: FormData) {
   await leaveCommunity(str(fd, "groupId"));
-  redirect("/");
+  redirect("/me");
 }

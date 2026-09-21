@@ -319,39 +319,62 @@ Everything in PRD §31 (MVP scope):
 
 ---
 
-## Communities
+## Communities, owners and accounts
 
-One deployment runs any number of badminton communities, each with its own venues,
-sessions, roster, fees and PIN. Three roles, deliberately kept apart:
+One deployment runs any number of badminton communities. **Each community belongs to its
+owner** — its members, sessions, scores and payment records — and nobody outside it,
+including the platform, can see in or take it over.
 
 | Role | Scope | Can |
 | :--- | :--- | :--- |
-| **Platform admin** | The whole platform (`/hq`) | Create communities, appoint and remove their organizers, archive them |
-| **Organizer** | One community (`/admin`) | Venues, sessions, fees, members, join policy, invitations, co-organizers |
-| **Player** | Communities they have joined | See and book those sessions only |
+| **Platform admin** | The platform (`/hq`) | Approve or decline requests for new communities, see totals, suspend one for abuse. **Nothing inside any community** |
+| **Owner** (and co-owners) | One community | Everything below, plus: appoint organizers and co-owners, decide visibility, delete the community |
+| **Organizer** | One community | Venues, sessions, fees, members, join policy, invitations |
+| **Coordinator** | One community | The court board, check-in and payments on the night |
+| **Player** | Communities they joined | Book, check in, play; ask to help run it |
 
-A player sees nothing of a community they have not joined — no sessions, roster, scores or
-money. Getting in:
+Any registered player can **ask for a community**. When the platform admin approves, the
+requester becomes its owner, and is shown an ownership notice once — accepted and recorded —
+that spells out what the platform will never do. The notice is only true because
+permissions come from membership alone: there is no platform-admin shortcut anywhere in
+`lib/auth`, and the end-to-end suite forges owner-only actions as an organizer and as the
+platform admin to prove it.
+
+An owner can delete their community. It vanishes for every member at once, any owner can
+restore it for **30 days**, and a daily job (`/api/cron/purge`) then erases it for good.
+Registered members keep their accounts.
+
+**Ratings are per community.** A player's rating in one community is built from that
+community's games and shown nowhere else. Their own profile is the only place their
+communities sit side by side.
+
+Getting into a community:
 
 | Door | Route | Result |
 | :--- | :--- | :--- |
-| Personal invitation | `/i/<token>` | Straight in. Single-use, 14 days, only the SHA-256 is stored |
-| Share link or code | `/join/<CODE>` | Follows the join policy: open, approval or closed |
-| Public directory | `/communities` → `/c/<slug>` | Same, for communities that chose to be listed |
-| QR at the door | `/s/<code>/checkin` | Same, so newcomers can still join on the night |
+| Invitation by player number | in the app, on `/me` | Straight in. Only that player can accept; the inviter is never told whose number it was |
+| Invitation by email or link | `/i/<token>` | Straight in. Single-use, 14 days, only the SHA-256 is stored |
+| Share link or code | `/join/<CODE>` | Follows the join policy: open, approval or invitation-only |
+| Public directory | `/communities` → `/c/<slug>` | For signed-in members; shows when and where it plays, never who |
+| QR at the door | `/s/<code>/checkin` | Walk-ins can still be checked in on the night |
 
-Every server action resolves the community its target actually belongs to (session, match,
-membership, cost, announcement) and checks the caller against that — never against a
-`groupId` field the browser sent. The end-to-end suite includes forging that field to reach
-another community, alongside a control proving the same form works on the caller's own.
+## Accounts for everyone
 
-## Who can see what
+Anyone can register with just an email address: the first code sent to a new address creates
+the account. Every account gets a **player number** (1001 onwards) — a name tag for the door
+and for invitations, never a key.
 
-Players never sign in. They tap their name once and the phone remembers — no account, no
-password, nothing to lose at the door. Accounts exist only for the people who can see other
-people's money and history.
+On a phone that has proved itself once by email, a **four-digit PIN** unlocks the account from
+then on. The PIN is checked only against that phone's own long random device token, both
+stored hashed, so it is useless anywhere else; five wrong tries clear it and the phone goes
+back to email. Guessable PINs (1111, 1234…) are refused.
 
-For those, one email carries **two ways in**: a six-digit code and a clickable link, on the
+Registering on a phone that has been used as an unregistered player **takes that player's
+history over** — and the welcome screen says so, with a "that isn't me" that splits it back
+apart. Once someone registers, their name is locked: nobody can book, cancel or score as them
+by tapping it any more.
+
+Every sign-in email carries **two ways in**: a six-digit code and a clickable link, on the
 same token, so using either burns the other. The code is there because a magic link quietly
 assumes the browser opening the email is the browser signing in. On a phone it usually
 is not — the mail client hands the link to its own in-app browser, the session lands there,
@@ -432,6 +455,7 @@ phone with one bar of signal in a sports hall.
 | `RESEND_API_KEY` | none | Sends sign-in codes. Without it, dev prints them; production says so rather than pretending |
 | `MAIL_FROM` | Resend sandbox | `Smash Queue <noreply@yourdomain>`, on a domain Resend has verified |
 | `OWNER_EMAIL` | — | `db:bootstrap` only. How the first organizer signs in, so it is required there |
+| `CRON_SECRET` | none | Lets Vercel's scheduler run the daily purge of deleted communities. Without it the purge never runs |
 | `PLATFORM_ADMINS` | none | Comma-separated sign-in addresses promoted to platform admin on their next sign-in. Written through to the database, so it can be removed afterwards |
 | `APP_BASE_URL` | derived from request | Optional. QR codes normally follow the domain they're served from |
 | `NEXT_PUBLIC_TIME_ZONE` | `Asia/Dubai` | Wall-clock times. A UTC server shows Gulf check-ins four hours early without it |

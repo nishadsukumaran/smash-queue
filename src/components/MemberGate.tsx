@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { groups, users } from "@/db/schema";
+import { groups } from "@/db/schema";
 import { JoinCommunityForm } from "@/components/JoinCommunityForm";
 import { canStaff, currentAccount } from "@/lib/auth";
-import { currentUserId, isStaffFor } from "@/lib/identity";
+import { isStaffFor } from "@/lib/identity";
 import { isMemberOf } from "@/lib/tenant";
 import { joinPolicyOf } from "@/lib/join-policy";
 
@@ -37,8 +37,6 @@ export async function MemberGate({
   const [group] = await db.select().from(groups).where(eq(groups.id, groupId));
   if (!group) return null;
 
-  const uid = await currentUserId();
-  const me = uid ? (await db.select().from(users).where(eq(users.id, uid)))[0] : null;
   const policy = joinPolicyOf(group.settings);
 
   return (
@@ -52,7 +50,12 @@ export async function MemberGate({
             ? "Join the community to book and see who's playing. The organizer lets new players in by hand."
             : "Join the community to book and see who's playing. One tap."}
       </p>
-      <JoinCommunityForm groupId={group.id} policy={policy} knownAs={me?.name ?? null} />
+      <JoinCommunityForm
+        groupId={group.id}
+        policy={policy}
+        signedIn={Boolean(account?.onboarded)}
+        returnTo={`/s/${code}`}
+      />
       <p className="mt-4 text-xs text-muted">
         Already at the venue?{" "}
         <Link href={`/s/${code}/checkin`} className="text-teal hover:underline">

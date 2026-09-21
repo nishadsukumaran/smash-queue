@@ -21,7 +21,7 @@ export default async function StatsPage() {
         </p>
         <div className="mt-3 divide-y divide-line/60">
           {played.map((p, i) => {
-            const band = ratingBand(p.user.rating);
+            const band = ratingBand(p.rating);
             return (
               <div key={p.user.id} className="flex items-center gap-2 py-2">
                 <span className="w-6 text-xs text-muted tabular">{i + 1}</span>
@@ -50,7 +50,7 @@ export default async function StatsPage() {
                 </div>
                 <div className="w-20 text-right">
                   <p className="text-sm font-bold tabular" style={{ color: band.color }}>
-                    {Math.round(p.user.rating)}
+                    {Math.round(p.rating)}
                   </p>
                   <p className="text-[.58rem] uppercase tracking-wider text-muted">{band.label}</p>
                 </div>

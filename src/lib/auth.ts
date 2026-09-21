@@ -1,20 +1,32 @@
 import "server-only";
-import { randomBytes, randomInt, createHash, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomInt, createHash, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
+import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { and, eq, gt, gte, isNull, lt, desc, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  authEmails, authSessions, authTokens, groupMembers, users, type MemberRole,
+  authEmails, authSessions, authTokens, groupMembers, groups, trustedDevices, users,
+  type MemberRole,
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
+import { colorFor } from "@/lib/format";
+
+const scrypt = promisify(scryptCb) as (pw: string, salt: string, len: number) => Promise<Buffer>;
 
 /**
- * Magic-link auth for staff and organizers.
+ * Accounts, for everyone.
  *
- * Players are deliberately untouched: they identify themselves with the
- * `bq_uid` cookie and never see a sign-in screen, because asking someone to
- * check their email at the door of a sports hall is how you lose them. Accounts
- * exist only for the people who can see other people's money and data.
+ * Any email address can register: the first code sent to a new address
+ * creates the account when it is used. After that, a phone that has proved
+ * itself once can be unlocked with a four-digit PIN (see trusted devices
+ * below), so the email round trip happens once per phone rather than once a
+ * month.
+ *
+ * Players who never register still exist — roster entries an organizer typed
+ * in, walk-ins checked in at the door — and are identified by the `bq_uid`
+ * cookie as before. The moment someone registers, that shortcut stops working
+ * for their name: a registered player can only be acted as by signing in.
  *
  * Tokens are random, never guessable, and only their SHA-256 reaches the
  * database. A dump of `auth_tokens` or `auth_sessions` is therefore useless on
@@ -22,6 +34,11 @@ import { newId } from "@/lib/ids";
  */
 
 const SESSION_COOKIE = "bq_session";
+const DEVICE_COOKIE = "bq_device";
+const UID_COOKIE = "bq_uid";
+const YEAR_S = 60 * 60 * 24 * 365;
+/** Wrong PINs before the phone is sent back to email. */
+const MAX_PIN_ATTEMPTS = 5;
 const LINK_TTL_MS = 15 * 60 * 1000;
 /** Wrong code guesses before the token is destroyed rather than left to grind. */
 const MAX_CODE_ATTEMPTS = 5;
@@ -57,37 +74,31 @@ function sameHash(a: string, b: string) {
 /* ------------------------------------------------------------ requesting */
 
 export type LinkRequest =
-  | { ok: true; token: string; code: string; user: { id: string; name: string; email: string } }
-  | { ok: false; reason: "unknown" | "rate-limited" };
+  | {
+      ok: true;
+      token: string;
+      code: string;
+      /** Null for an address nobody has registered yet. */
+      user: { id: string; name: string } | null;
+      email: string;
+    }
+  | { ok: false; reason: "rate-limited" };
 
 /**
- * Creates a magic link for an email, if that email belongs to someone who is
- * staff somewhere.
- *
- * Callers must show the same "check your inbox" message whatever this returns.
- * Reporting "no such account" would turn the sign-in form into a way to test
- * whether a given person is a member.
+ * Creates a code and link for any address. Registered or not, the answer is
+ * the same, so the form reveals nothing about who plays here — and a new
+ * address becomes an account when its first code is used.
  */
 export async function requestMagicLink(rawEmail: string): Promise<LinkRequest> {
   const email = normalizeEmail(rawEmail);
   const now = new Date();
 
-  // auth_emails is the only place sign-in looks, so an organizer with a
-  // personal and a work address reaches one account rather than two.
+  // auth_emails is the only place sign-in looks, so a person with a personal
+  // and a work address reaches one account rather than two.
   const [identity] = await db.select().from(authEmails).where(eq(authEmails.email, email));
-  if (!identity) return { ok: false, reason: "unknown" };
-
-  const [user] = await db.select().from(users).where(eq(users.id, identity.userId));
-  if (!user) return { ok: false, reason: "unknown" };
-
-  const staffRoles: MemberRole[] = ["coordinator", "organizer"];
-  const memberships = await db
-    .select()
-    .from(groupMembers)
-    .where(and(eq(groupMembers.userId, user.id), eq(groupMembers.status, "active")));
-  if (!memberships.some((m) => staffRoles.includes(m.role))) {
-    return { ok: false, reason: "unknown" };
-  }
+  const [user] = identity
+    ? await db.select().from(users).where(eq(users.id, identity.userId))
+    : [];
 
   const live = await db
     .select()
@@ -123,7 +134,7 @@ export async function requestMagicLink(rawEmail: string): Promise<LinkRequest> {
     createdAt: now,
   });
 
-  return { ok: true, token, code, user: { id: user.id, name: user.name, email } };
+  return { ok: true, token, code, email, user: user ? { id: user.id, name: user.name } : null };
 }
 
 /* -------------------------------------------------------------- redeeming */
@@ -143,11 +154,6 @@ export async function redeemMagicLink(token: string): Promise<string | null> {
   if (row.consumedAt) return null;
   if (row.expiresAt <= now) return null;
 
-  // Checked before consuming, so a token whose account has since been removed
-  // is not burned for nothing.
-  const [identity] = await db.select().from(authEmails).where(eq(authEmails.email, row.email));
-  if (!identity) return null;
-
   // Consume first. If opening the session then fails, the link is spent rather
   // than left live for a replay.
   await db.update(authTokens).set({ consumedAt: now }).where(eq(authTokens.id, row.id));
@@ -156,21 +162,80 @@ export async function redeemMagicLink(token: string): Promise<string | null> {
 }
 
 /**
- * Turns a proven address into a signed-in browser. Shared by the link and the
- * code so the two doors cannot drift apart in what they grant.
+ * Turns a proven address into a signed-in browser. Shared by the link, the
+ * code and the PIN so the three doors cannot drift apart in what they grant.
+ *
+ * A proven address with no account behind it is a registration. If this phone
+ * has been used as an unregistered player — tapped their name at the door for
+ * months — the new account takes that player over, so their games, rating and
+ * history come with them. /welcome then asks them to confirm it really is
+ * them, and splits it back apart if not.
  */
 async function openSession(email: string): Promise<string | null> {
-  const [identity] = await db.select().from(authEmails).where(eq(authEmails.email, email));
-  if (!identity) return null;
+  let [identity] = await db.select().from(authEmails).where(eq(authEmails.email, email));
+  const now = new Date();
+
+  if (!identity) {
+    const jar = await cookies();
+    const phoneUid = jar.get(UID_COOKIE)?.value;
+    let userId: string | null = null;
+
+    if (phoneUid) {
+      const [candidate] = await db.select().from(users).where(eq(users.id, phoneUid));
+      const [taken] = candidate
+        ? await db.select().from(authEmails).where(eq(authEmails.userId, candidate.id))
+        : [];
+      // Only an unregistered player can be claimed. A registered one already
+      // belongs to somebody with an email of their own.
+      if (candidate && !taken) userId = candidate.id;
+    }
+
+    if (!userId) {
+      userId = newId("usr");
+      const provisional = email.split("@")[0].replace(/[._-]+/g, " ").slice(0, 40) || "New player";
+      await db.insert(users).values({
+        id: userId,
+        name: provisional,
+        email,
+        avatarColor: colorFor(provisional),
+        rating: 1200,
+        createdAt: now,
+      });
+    } else {
+      await db.update(users).set({ email }).where(and(eq(users.id, userId), isNull(users.email)));
+    }
+
+    await db.insert(authEmails).values({ id: newId("aem"), userId, email, createdAt: now });
+    [identity] = await db.select().from(authEmails).where(eq(authEmails.email, email));
+    if (!identity) return null;
+  }
+
   const [user] = await db.select().from(users).where(eq(users.id, identity.userId));
   if (!user) return null;
 
+  await startSession(user.id);
+  await trustThisDevice(user.id);
+  return user.id;
+}
+
+/**
+ * Opens a session for a user the caller has already proved. Server-side only
+ * and never exported from an action module: every path into it must have done
+ * its own proving first (a code, a link, a PIN, or /welcome splitting an
+ * account it had just proved).
+ */
+export async function beginSessionFor(userId: string) {
+  await startSession(userId);
+  await trustThisDevice(userId);
+}
+
+async function startSession(userId: string) {
   const now = new Date();
   const sessionToken = mint();
   const h = await headers();
   await db.insert(authSessions).values({
     id: newId("ase"),
-    userId: user.id,
+    userId,
     tokenHash: hash(sessionToken),
     expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
     lastSeenAt: now,
@@ -179,15 +244,188 @@ async function openSession(email: string): Promise<string | null> {
   });
 
   const jar = await cookies();
+  const secure = process.env.NODE_ENV === "production";
   jar.set(SESSION_COOKIE, sessionToken, {
     path: "/",
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure,
     maxAge: Math.floor(SESSION_TTL_MS / 1000),
   });
+  // One identity per browser: whoever signed in is the player this phone acts
+  // as, so bookings and check-ins are theirs without a second step.
+  jar.set(UID_COOKIE, userId, { path: "/", maxAge: YEAR_S, sameSite: "lax" });
+}
 
-  return user.id;
+/* ------------------------------------------------------- trusted devices */
+
+/**
+ * Marks this browser as one the person has proved by email. Reuses the
+ * existing record when the phone already belongs to them, so signing in again
+ * does not throw away a PIN they have set.
+ */
+async function trustThisDevice(userId: string) {
+  const jar = await cookies();
+  const existing = jar.get(DEVICE_COOKIE)?.value;
+  const now = new Date();
+
+  if (existing) {
+    const [row] = await db
+      .select()
+      .from(trustedDevices)
+      .where(eq(trustedDevices.tokenHash, hash(existing)));
+    if (row && row.userId === userId && !row.revokedAt) {
+      await db
+        .update(trustedDevices)
+        .set({ lastUsedAt: now, failedAttempts: 0 })
+        .where(eq(trustedDevices.id, row.id));
+      return;
+    }
+  }
+
+  const token = mint();
+  const h = await headers();
+  await db.insert(trustedDevices).values({
+    id: newId("dev"),
+    userId,
+    tokenHash: hash(token),
+    userAgent: h.get("user-agent")?.slice(0, 200) ?? null,
+    createdAt: now,
+    lastUsedAt: now,
+  });
+  jar.set(DEVICE_COOKIE, token, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: YEAR_S,
+  });
+}
+
+async function thisDevice() {
+  const jar = await cookies();
+  const token = jar.get(DEVICE_COOKIE)?.value;
+  if (!token) return null;
+  const [row] = await db
+    .select()
+    .from(trustedDevices)
+    .where(and(eq(trustedDevices.tokenHash, hash(token)), isNull(trustedDevices.revokedAt)));
+  return row ?? null;
+}
+
+const PIN_SHAPE = /^\d{4}$/;
+
+async function pinDigest(pin: string, salt: string) {
+  return (await scrypt(pin, salt, 32)).toString("hex");
+}
+
+/** Who this phone can be unlocked as with a PIN, if anyone. */
+export async function pinCandidate(): Promise<{ name: string; playerNo: number } | null> {
+  const device = await thisDevice();
+  if (!device?.pinHash) return null;
+  const [user] = await db.select().from(users).where(eq(users.id, device.userId));
+  return user ? { name: user.name, playerNo: user.playerNo } : null;
+}
+
+/** Sets or replaces the PIN on this phone. Needs a signed-in session on it. */
+export async function setDevicePin(
+  pin: string,
+  /** Only for a caller that has just proved this user itself in the same request. */
+  provenUserId?: string,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!PIN_SHAPE.test(pin)) return { ok: false, message: "The PIN is four digits." };
+  if (/^(\d)\1{3}$/.test(pin) || ["1234", "4321", "0123", "9876"].includes(pin))
+    return { ok: false, message: "Pick something less guessable than that." };
+
+  const userId = provenUserId ?? (await sessionUserId());
+  if (!userId) return { ok: false, message: "Sign in first." };
+
+  let device = await thisDevice();
+  if (!device || device.userId !== userId) {
+    await trustThisDevice(userId);
+    device = await thisDevice();
+  }
+  if (!device) return { ok: false, message: "Could not remember this phone." };
+
+  const salt = randomBytes(16).toString("hex");
+  await db
+    .update(trustedDevices)
+    .set({ pinHash: await pinDigest(pin, salt), pinSalt: salt, failedAttempts: 0 })
+    .where(eq(trustedDevices.id, device.id));
+  return { ok: true };
+}
+
+/**
+ * Unlocks this phone with its PIN.
+ *
+ * The PIN alone is worthless: it is checked only against the device record
+ * named by this browser's own long random cookie. Five misses clear the PIN,
+ * and from then on this phone signs in by email again.
+ */
+export async function signInWithPin(
+  pin: string,
+): Promise<{ ok: true; userId: string } | { ok: false; message: string; locked?: boolean }> {
+  const device = await thisDevice();
+  if (!device?.pinHash || !device.pinSalt)
+    return { ok: false, message: "This phone has no PIN yet. Sign in with email.", locked: true };
+
+  const digest = await pinDigest(pin.replace(/\D/g, ""), device.pinSalt);
+  const match =
+    digest.length === device.pinHash.length &&
+    timingSafeEqual(Buffer.from(digest), Buffer.from(device.pinHash));
+
+  if (!match) {
+    const attempts = device.failedAttempts + 1;
+    const locked = attempts >= MAX_PIN_ATTEMPTS;
+    await db
+      .update(trustedDevices)
+      .set(
+        locked
+          ? { failedAttempts: attempts, pinHash: null, pinSalt: null }
+          : { failedAttempts: attempts },
+      )
+      .where(eq(trustedDevices.id, device.id));
+    return locked
+      ? { ok: false, locked: true, message: "Too many wrong PINs. Sign in with email to set a new one." }
+      : {
+          ok: false,
+          message: `That PIN didn't match. ${MAX_PIN_ATTEMPTS - attempts} ${MAX_PIN_ATTEMPTS - attempts === 1 ? "try" : "tries"} left.`,
+        };
+  }
+
+  await db
+    .update(trustedDevices)
+    .set({ failedAttempts: 0, lastUsedAt: new Date() })
+    .where(eq(trustedDevices.id, device.id));
+  await startSession(device.userId);
+  return { ok: true, userId: device.userId };
+}
+
+/** Stops this phone being unlockable by PIN, and forgets it entirely. */
+export async function forgetThisDevice() {
+  const device = await thisDevice();
+  if (device)
+    await db
+      .update(trustedDevices)
+      .set({ revokedAt: new Date(), pinHash: null, pinSalt: null })
+      .where(eq(trustedDevices.id, device.id));
+  (await cookies()).delete(DEVICE_COOKIE);
+}
+
+/** Every phone this person has trusted, for the security list on /me. */
+export async function listMyDevices(userId: string) {
+  return db
+    .select()
+    .from(trustedDevices)
+    .where(and(eq(trustedDevices.userId, userId), isNull(trustedDevices.revokedAt)))
+    .orderBy(desc(trustedDevices.lastUsedAt));
+}
+
+export async function revokeDevice(userId: string, deviceId: string) {
+  await db
+    .update(trustedDevices)
+    .set({ revokedAt: new Date(), pinHash: null, pinSalt: null })
+    .where(and(eq(trustedDevices.id, deviceId), eq(trustedDevices.userId, userId)));
 }
 
 /**
@@ -249,6 +487,9 @@ export type Account = {
   id: string;
   name: string;
   email: string | null;
+  playerNo: number;
+  /** False until they have confirmed their name on /welcome. */
+  onboarded: boolean;
   /**
    * Runs the platform: creates communities, appoints their organizers, and by
    * extension can reach any community's organizer screens. Somebody has to be
@@ -279,26 +520,55 @@ function envAdmins(): string[] {
  * The signed-in account, or null. Read this rather than trusting a cookie:
  * the session may have expired or been signed out on another device.
  */
-export async function currentAccount(): Promise<Account | null> {
+/**
+ * The signed-in user's id, or null. One query, memoised for the request, so
+ * everything that asks "who is this" pays for it once.
+ */
+export const sessionUserId = cache(async (): Promise<string | null> => {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
-
-  const now = new Date();
   const [session] = await db
-    .select()
+    .select({ userId: authSessions.userId })
     .from(authSessions)
-    .where(and(eq(authSessions.tokenHash, hash(token)), gt(authSessions.expiresAt, now)));
-  if (!session) return null;
+    .where(and(eq(authSessions.tokenHash, hash(token)), gt(authSessions.expiresAt, new Date())));
+  return session?.userId ?? null;
+});
 
-  const [user] = await db.select().from(users).where(eq(users.id, session.userId));
+/** True when this user has an account (a sign-in address). */
+export const isRegistered = cache(async (userId: string): Promise<boolean> => {
+  const [row] = await db
+    .select({ id: authEmails.id })
+    .from(authEmails)
+    .where(eq(authEmails.userId, userId))
+    .limit(1);
+  return Boolean(row);
+});
+
+export const currentAccount = cache(async (): Promise<Account | null> => {
+  const userId = await sessionUserId();
+  if (!userId) return null;
+
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
   if (!user) return null;
 
-  const memberships = await db
-    .select()
-    .from(groupMembers)
-    .where(and(eq(groupMembers.userId, user.id), eq(groupMembers.status, "active")))
-    .orderBy(desc(groupMembers.joinedAt));
+  // A deleted or suspended community grants nothing, to anyone — including
+  // its own staff — until it is restored.
+  const memberships = (
+    await db
+      .select({ m: groupMembers })
+      .from(groupMembers)
+      .innerJoin(groups, eq(groups.id, groupMembers.groupId))
+      .where(
+        and(
+          eq(groupMembers.userId, user.id),
+          eq(groupMembers.status, "active"),
+          isNull(groups.deletedAt),
+          isNull(groups.archivedAt),
+        ),
+      )
+      .orderBy(desc(groupMembers.joinedAt))
+  ).map((r) => r.m);
 
   // Promotion from the environment is checked only for accounts that are not
   // already admins, so the usual request pays nothing for it.
@@ -323,39 +593,50 @@ export async function currentAccount(): Promise<Account | null> {
     id: user.id,
     name: user.name,
     email: user.email,
+    playerNo: user.playerNo,
+    onboarded: Boolean(user.onboardedAt),
     platformAdmin,
     memberships: memberships.map((m) => ({ groupId: m.groupId, role: m.role })),
   };
-}
+});
 
 /** Runs the platform itself. Not scoped to any one community. */
 export function isPlatformAdmin(account: Account | null) {
   return account?.platformAdmin === true;
 }
 
-/** True when the account may run sessions for this group. */
+/*
+ * Permissions come from membership and nothing else.
+ *
+ * There is deliberately no platform-admin shortcut in any of these. A
+ * community and its members belong to its owner; the platform can approve new
+ * communities and suspend abusive ones, and has no way in beyond that. If a
+ * bypass is ever added here, the ownership notice every owner accepted stops
+ * being true.
+ */
+
+const STAFF: MemberRole[] = ["coordinator", "organizer", "owner"];
+const RUNS: MemberRole[] = ["organizer", "owner"];
+
+/** True when the account may run sessions for this community. */
 export function canStaff(account: Account | null, groupId: string) {
   if (!account) return false;
-  if (account.platformAdmin) return true;
-  return account.memberships.some(
-    (m) => m.groupId === groupId && (m.role === "coordinator" || m.role === "organizer"),
-  );
+  return account.memberships.some((m) => m.groupId === groupId && STAFF.includes(m.role));
+}
+
+/** True when the account runs this community day to day: sessions, venues, members, money. */
+export function canOrganize(account: Account | null, groupId: string) {
+  if (!account) return false;
+  return account.memberships.some((m) => m.groupId === groupId && RUNS.includes(m.role));
 }
 
 /**
- * True when the account runs this community: members, venues, fees, settings.
- *
- * Platform admins pass here for every community. That is a real grant of
- * access to other people's rosters and money, and it is deliberate: the
- * person who creates communities and appoints their organizers is already
- * trusted with exactly that, and a platform with no way to recover a
- * community whose organizer has vanished is a platform with a support queue
- * it cannot answer.
+ * True when the account owns this community: appoints organizers and
+ * co-owners, decides who can find it, and can delete it.
  */
-export function canOrganize(account: Account | null, groupId: string) {
+export function canOwn(account: Account | null, groupId: string) {
   if (!account) return false;
-  if (account.platformAdmin) return true;
-  return account.memberships.some((m) => m.groupId === groupId && m.role === "organizer");
+  return account.memberships.some((m) => m.groupId === groupId && m.role === "owner");
 }
 
 /* --------------------------------------------------------------- signing out */
@@ -367,6 +648,9 @@ export async function signOut() {
     await db.delete(authSessions).where(eq(authSessions.tokenHash, hash(token)));
   }
   jar.delete(SESSION_COOKIE);
+  // The phone forgets who it was acting as, but stays trusted: the next
+  // sign-in on it is a PIN, not an email.
+  jar.delete(UID_COOKIE);
 }
 
 /**

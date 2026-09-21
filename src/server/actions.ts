@@ -19,6 +19,7 @@ import { validCoords } from "@/lib/geocode";
 import { grantStaff, revokeStaff, setCurrentUserId, clearCurrentUser } from "@/lib/identity";
 import { DEFAULT_WEIGHTS, BALANCE_BY_TYPE } from "@/lib/queue-engine";
 import { setActiveCommunity } from "@/lib/tenant";
+import { isRegistered } from "@/lib/auth";
 
 type Result = { ok: boolean; message?: string; id?: string };
 
@@ -42,7 +43,13 @@ async function notify(userIds: string[], sessionId: string, kind: string, body: 
 
 /* ------------------------------------------------------------- identity */
 
+/**
+ * "That's me" on the name list. Only for players who have never registered:
+ * once someone has an account, their name is theirs and the only way to act
+ * as them is to sign in as them.
+ */
 export async function selectIdentity(userId: string) {
+  if (await isRegistered(userId)) return { ok: false, message: "That player signs in with their account." };
   await setCurrentUserId(userId);
   touch();
   return { ok: true };
@@ -106,6 +113,8 @@ export async function addMember(
     userId,
     role: "player",
     joinedAt: now,
+    // The organizer's estimate seeds this community's rating for them.
+    rating,
   });
   touch();
   return { ok: true, id: userId };
@@ -273,35 +282,8 @@ export async function updateGroup(
   return { ok: true };
 }
 
-export async function setSelfSignup(groupId: string, allow: boolean) {
-  const rows = await db.select().from(groups).where(eq(groups.id, groupId));
-  const group = rows[0];
-  if (!group) return { ok: false, message: "Group not found" };
-  await db
-    .update(groups)
-    .set({ settings: { ...group.settings, allowSelfSignup: allow } })
-    .where(eq(groups.id, groupId));
-  touch();
-  return { ok: true };
-}
 
-export async function setMemberRole(
-  membershipId: string,
-  role: "player" | "coordinator" | "organizer",
-) {
-  await db.update(groupMembers).set({ role }).where(eq(groupMembers.id, membershipId));
-  touch();
-  return { ok: true };
-}
 
-export async function setMemberActive(membershipId: string, active: boolean) {
-  await db
-    .update(groupMembers)
-    .set({ status: active ? "active" : "inactive" })
-    .where(eq(groupMembers.id, membershipId));
-  touch();
-  return { ok: true };
-}
 
 export async function addVenue(
   groupId: string,
@@ -837,18 +819,25 @@ export async function finishMatch(
       confirmed: !(await requiresConfirmation(s.groupId)),
     });
 
-    const userRows = await db.select().from(users).where(inArray(users.id, playerIds));
+    // Ratings live on the membership: this community's games move this
+    // community's rating and nothing else.
+    const rows = await db
+      .select()
+      .from(groupMembers)
+      .where(and(eq(groupMembers.groupId, s.groupId), inArray(groupMembers.userId, playerIds)));
+    const byUser = new Map(rows.map((r) => [r.userId, r]));
     const ratingInput = players.map((p) => {
-      const u = userRows.find((x) => x.id === p.userId)!;
-      return { id: u.id, rating: u.rating, ratingGames: u.ratingGames, team: p.team };
+      const m = byUser.get(p.userId);
+      return { id: p.userId, rating: m?.rating ?? 1200, ratingGames: m?.ratingGames ?? 0, team: p.team };
     });
     const next = updateRatings(ratingInput, score.a, score.b, s.pointsTo);
     for (const [id, rating] of Object.entries(next)) {
-      const u = userRows.find((x) => x.id === id)!;
+      const m = byUser.get(id);
+      if (!m) continue;
       await db
-        .update(users)
-        .set({ rating, ratingGames: u.ratingGames + 1 })
-        .where(eq(users.id, id));
+        .update(groupMembers)
+        .set({ rating, ratingGames: m.ratingGames + 1 })
+        .where(eq(groupMembers.id, m.id));
     }
   }
 

@@ -12,10 +12,10 @@ import { canOrganize, canStaff, currentAccount } from "@/lib/auth";
 import type { GameType, PaymentMethod, QueueMode } from "@/db/schema";
 import * as a from "./actions";
 import type { RegisterState } from "./register-types";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  announcements, groupMembers, matches, preferences, sessionCosts, sessions,
+  announcements, groupMembers, groups, matches, preferences, sessionCosts, sessions,
 } from "@/db/schema";
 
 /* ------------------------------------------------------------ guards */
@@ -33,6 +33,16 @@ import {
 async function groupOfSession(sessionId: string) {
   const [row] = await db.select({ g: sessions.groupId }).from(sessions).where(eq(sessions.id, sessionId));
   return row?.g ?? null;
+}
+
+/** A deleted or suspended community accepts nothing, from anyone. */
+async function live(groupId: string | null) {
+  if (!groupId) return false;
+  const [row] = await db
+    .select({ id: groups.id })
+    .from(groups)
+    .where(and(eq(groups.id, groupId), isNull(groups.deletedAt), isNull(groups.archivedAt)));
+  return Boolean(row);
 }
 
 async function groupOfMatch(matchId: string) {
@@ -80,7 +90,7 @@ async function announcementIn(groupId: string, announcementId: string) {
 
 /** Coordinator-level: a staff account here, or this community's PIN on this phone. */
 async function isStaff(groupId: string | null) {
-  if (!groupId) return false;
+  if (!groupId || !(await live(groupId))) return false;
   return canStaff(await currentAccount(), groupId) || (await isStaffFor(groupId));
 }
 
@@ -92,7 +102,7 @@ async function isOrganizer(groupId: string | null) {
 
 /** Active member of the community — what booking and self check-in require. */
 async function isMember(groupId: string | null, userId: string) {
-  if (!groupId) return false;
+  if (!groupId || !(await live(groupId))) return false;
   const [row] = await db
     .select({ id: groupMembers.id })
     .from(groupMembers)
@@ -127,7 +137,8 @@ const num = (fd: FormData, k: string, fallback = 0) => {
 const list = (fd: FormData, k: string) => str(fd, k).split(",").filter(Boolean);
 
 export async function identityAction(fd: FormData) {
-  await a.selectIdentity(str(fd, "userId"));
+  const res = await a.selectIdentity(str(fd, "userId"));
+  if (!res.ok) redirect(`/signin?next=${encodeURIComponent(str(fd, "next") || "/")}`);
   const next = str(fd, "next");
   if (next) redirect(next);
 }
@@ -371,28 +382,13 @@ export async function updateGroupAction(fd: FormData) {
   });
 }
 
-export async function selfSignupAction(fd: FormData) {
-  if (!(await isOrganizer(str(fd, "groupId")))) return;
-  await a.setSelfSignup(str(fd, "groupId"), str(fd, "allow") === "1");
-}
 
 export async function addMemberAction(fd: FormData) {
   if (!(await isOrganizer(str(fd, "groupId")))) return;
   await a.addMember(str(fd, "groupId"), str(fd, "name"), str(fd, "phone"), num(fd, "rating", 1200));
 }
 
-export async function memberRoleAction(fd: FormData) {
-  if (!(await isOrganizer(await groupOfMembership(str(fd, "membershipId"))))) return;
-  await a.setMemberRole(
-    str(fd, "membershipId"),
-    str(fd, "role") as "player" | "coordinator" | "organizer",
-  );
-}
 
-export async function memberActiveAction(fd: FormData) {
-  if (!(await isOrganizer(await groupOfMembership(str(fd, "membershipId"))))) return;
-  await a.setMemberActive(str(fd, "membershipId"), str(fd, "active") === "1");
-}
 
 export async function addVenueAction(fd: FormData) {
   if (!(await isOrganizer(str(fd, "groupId")))) return;

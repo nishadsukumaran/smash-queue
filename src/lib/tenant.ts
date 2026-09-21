@@ -4,7 +4,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { groupMembers, groups, type Group, type MemberRole } from "@/db/schema";
 import { currentUserId } from "@/lib/identity";
-import { currentAccount, isPlatformAdmin, type Account } from "@/lib/auth";
+import { currentAccount, type Account } from "@/lib/auth";
 
 /**
  * Which community the person is currently looking at.
@@ -25,7 +25,7 @@ const YEAR = 60 * 60 * 24 * 365;
 
 export type Membership = { group: Group; role: MemberRole };
 
-const RANK: Record<MemberRole, number> = { organizer: 3, coordinator: 2, player: 1 };
+const RANK: Record<MemberRole, number> = { owner: 4, organizer: 3, coordinator: 2, player: 1 };
 
 /**
  * Every user id this browser might be acting as.
@@ -57,6 +57,7 @@ export async function myCommunities(account?: Account | null): Promise<Membershi
         inArray(groupMembers.userId, ids),
         eq(groupMembers.status, "active"),
         isNull(groups.archivedAt),
+        isNull(groups.deletedAt),
       ),
     );
 
@@ -85,16 +86,10 @@ export async function activeCommunity(account?: Account | null): Promise<Members
   const pinned = jar.get(ACTIVE)?.value;
 
   if (pinned) {
+    // Only ever a choice among communities this browser belongs to. There is
+    // no role — platform admin included — that can hold open somebody else's.
     const hit = mine.find((m) => m.group.id === pinned);
     if (hit) return hit;
-
-    // A platform admin can hold a community open that they are not a member
-    // of — that is the whole job. Everybody else falls through to their own
-    // list, so a stale or forged cookie is simply ignored.
-    if (isPlatformAdmin(acc)) {
-      const [group] = await db.select().from(groups).where(eq(groups.id, pinned));
-      if (group) return { group, role: "organizer" };
-    }
   }
 
   return mine[0] ?? null;

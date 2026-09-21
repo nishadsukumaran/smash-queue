@@ -6,7 +6,7 @@
  * convincing one because the link genuinely starts on our domain. Only
  * same-site absolute paths are allowed through.
  */
-export function safeNext(next: string | undefined, fallback = "/admin") {
+export function safeNext(next: string | undefined, fallback = "/") {
   if (!next) return fallback;
   // Must start with a single slash: "//evil.example" is protocol-relative and
   // would leave the site, and "https://..." obviously would.

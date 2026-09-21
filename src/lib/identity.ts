@@ -1,13 +1,31 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { isRegistered, sessionUserId } from "@/lib/auth";
 
 const UID = "bq_uid";
 const STAFF = "bq_staff";
 const YEAR = 60 * 60 * 24 * 365;
 
+/**
+ * The player this browser is acting as.
+ *
+ * A signed-in account always wins. Without one, the phone's `bq_uid` cookie
+ * still identifies players who have never registered — roster entries and
+ * walk-ins — exactly as before.
+ *
+ * But a cookie naming a *registered* player is ignored unless that player is
+ * signed in. That single rule is the name lock: once somebody registers, you
+ * cannot book, cancel or score as them by tapping their name any more.
+ */
 export async function currentUserId(): Promise<string | null> {
+  const signedIn = await sessionUserId();
+  if (signedIn) return signedIn;
+
   const jar = await cookies();
-  return jar.get(UID)?.value ?? null;
+  const uid = jar.get(UID)?.value ?? null;
+  if (!uid) return null;
+  if (await isRegistered(uid)) return null;
+  return uid;
 }
 
 export async function setCurrentUserId(userId: string) {

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { redeemMagicLink, pruneAuth } from "@/lib/auth";
+import { currentAccount, redeemMagicLink, pruneAuth } from "@/lib/auth";
 import { safeNext } from "@/lib/safe-next";
 
 /**
@@ -24,7 +24,11 @@ export async function GET(req: NextRequest) {
     const userId = await redeemMagicLink(token);
     if (userId) {
       await pruneAuth();
-      return NextResponse.redirect(new URL(next, req.nextUrl.origin));
+      // A brand-new account confirms its name (and can set a PIN) first.
+      const account = await currentAccount();
+      const target =
+        account && !account.onboarded ? `/welcome?next=${encodeURIComponent(next)}` : next;
+      return NextResponse.redirect(new URL(target, req.nextUrl.origin));
     }
   }
 

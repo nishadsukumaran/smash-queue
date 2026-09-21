@@ -4,7 +4,7 @@ import { Avatar } from "@/components/Avatar";
 import { NewPlayerForm } from "@/components/NewPlayerForm";
 import { joinPolicyOf } from "@/lib/join-policy";
 import { SubmitButton } from "@/components/SubmitButton";
-import { listMembers } from "@/server/queries";
+import { listMembers, registeredAmong } from "@/server/queries";
 import { activeCommunity } from "@/lib/tenant";
 import { identityAction } from "@/server/form-actions";
 import { currentUserId } from "@/lib/identity";
@@ -23,6 +23,8 @@ export default async function WhoPage({
   const group = active.group;
 
   const [members, userId] = await Promise.all([listMembers(group.id), currentUserId()]);
+  // Registered players' names are locked: they sign in, nobody taps them.
+  const locked = await registeredAmong(members.map((m) => m.user.id));
   const policy = joinPolicyOf(group.settings);
 
   return (
@@ -43,8 +45,8 @@ export default async function WhoPage({
       )}
 
       <div className="card divide-y divide-line">
-        {members.map(({ user }) => {
-          const band = ratingBand(user.rating);
+        {members.map(({ user, membership }) => {
+          const band = ratingBand(membership.rating);
           return (
             <form key={user.id} action={identityAction} className="flex items-center gap-3 p-3">
               <input type="hidden" name="userId" value={user.id} />
@@ -53,11 +55,19 @@ export default async function WhoPage({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{user.name}</p>
                 <p className="text-xs" style={{ color: band.color }}>
-                  {band.label} &middot; {Math.round(user.rating)}
+                  {band.label} &middot; {Math.round(membership.rating)}
                 </p>
               </div>
               {userId === user.id ? (
                 <span className="chip chip-live">That&apos;s you</span>
+              ) : locked.has(user.id) ? (
+                <Link
+                  href={`/signin?next=${encodeURIComponent(next ?? "/")}`}
+                  className="btn btn-ghost btn-sm"
+                  title="This player has an account"
+                >
+                  Sign in
+                </Link>
               ) : (
                 <SubmitButton className="btn btn-ghost btn-sm" pendingLabel="...">
                   Select

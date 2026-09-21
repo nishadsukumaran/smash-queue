@@ -15,9 +15,12 @@ screen and stops being the person everybody asks "when am I playing?"
 
 1. [The five-minute version](#1-the-five-minute-version)
 2. [For players](#2-for-players)
+   - [Your account](#your-account)
    - [Joining a community](#joining-a-community)
 3. [For the coordinator](#3-for-the-coordinator)
 4. [For the organizer](#4-for-the-organizer)
+   - [Owning a community](#4a-owning-a-community)
+   - [For the platform admin](#4b-for-the-platform-admin)
 5. [How the queue decides](#5-how-the-queue-decides)
 6. [Statuses, decoded](#6-statuses-decoded)
 7. [When things go sideways](#7-when-things-go-sideways)
@@ -48,34 +51,46 @@ score, who still owes money.
 
 ## 2. For players
 
+### Your account
+
+Sign in with just your email — **Sign in** at the top. We send a six-digit code; type it
+and you're in. New here? The same code creates your account. No password, ever.
+
+The first time, you'll pick the name other players know you by, and you can set a
+**four-digit PIN for this phone**. After that, signing in on this phone is just the PIN.
+On a new phone it's the email code once more. Five wrong PINs and the phone goes back to
+email — that's on purpose.
+
+Everyone gets a **player number**, like **#1047**, shown on your profile. Give it to an
+organizer and they can invite you straight in.
+
+Been playing on this phone without an account? Register on the same phone and your games,
+ratings and communities come with you. If that history isn't actually yours (a borrowed
+phone), tap **That isn't me — start fresh** on the welcome screen.
+
+Your **profile** (tap your name at the top) shows every community you're in, what you are
+in each, and your record — overall and community by community. Only you see it all together.
+
 ### Joining a community
 
-Everything in Smash Queue belongs to a **community** — one badminton crowd with its own
-venues, sessions, members and money. You only see the sessions of communities you have
-joined. Open the app without belonging to any and it takes you to **Communities**, the
-directory.
-
-There are three ways in:
+Everything belongs to a **community** — one badminton crowd with its own venues, sessions,
+members and money. You only see the sessions of communities you've joined.
 
 | You have… | What to do |
 | :--- | :--- |
-| A **personal invitation** from the organizer (email or a link starting `/i/`) | Open it and tap **Accept**. You are in immediately — the organizer already said yes by inviting you. Works once, for two weeks. |
-| The community's **share link** (`/join/XXXXXXXX`) or its **eight-character code** | Open the link, or type the code in **Got a code?** on the Communities page. What happens next depends on the community: straight in, or a request the organizer approves. |
-| Nothing, but the community is **public** | Find it in the directory, open it, tap **Join** or **Ask to join**. |
+| An invitation in your app | It's on your profile — tap **Join** |
+| An invitation link (`/i/…`) | Open it and tap **Accept** |
+| The community's share link or 8-character code | Open the link, or type the code under **Communities → Got a code?** |
+| Nothing, but it's a public community | Find it under **Communities**, then **Join** or **Ask to join** |
 
-If the community approves new members by hand you'll see **Request sent**. Nothing more to
-do: your phone remembers you, and once the organizer lets you in the sessions simply appear
-on your home screen.
+If the community approves new members by hand you'll see **Request sent**; once you're let
+in it appears on your profile and home screen.
 
-Some communities are **invitation only**. They don't take requests; ask the organizer for a
-link.
+Each community keeps **its own rating** for you, from games played there only. A community
+never sees your record from another one.
 
-Belong to more than one? A row of community names appears at the top of the home screen.
-Tap one to switch.
-
-A session link from a community you haven't joined shows the date and venue, and a join
-button — but not who's booked or the scores. The QR code at the door still works for
-newcomers; it has its own join box.
+Want to help run your community? On your profile, under that community, tap
+**Help run this community?** — the request goes to its owner.
 
 ### First time with the group
 
@@ -288,35 +303,24 @@ without an account, whatever the PIN is.
 
 ### Inviting people
 
-**Organizer → Members → Invite people** has both kinds of invitation.
+**Organizer → Members → Invite people** has three ways in:
 
-- **Share a link.** One link for the WhatsApp group. Whoever opens it joins the way your
-  *How people join* setting says — straight in (Open), or waiting for you (Approval). If
-  the link ends up somewhere it shouldn't, tap **Replace the shareable code** and every
-  copy of the old one stops working.
-- **Invite one person.** Name, email (optional) and role. They skip the approval queue,
-  because you named them. With an email address they get the invitation by mail; without
-  one you get a link to send yourself. Each is single-use and lasts two weeks. Unused ones
-  are listed underneath, with **Withdraw**.
+- **Share a link.** One link for the group chat. Whoever opens it signs in and joins the way
+  your *How people join* setting says — straight in, or waiting for you. If it ends up
+  somewhere it shouldn't, tap **Replace the shareable code**.
+- **By player number.** For someone already on Smash Queue — ask for the number on their
+  profile. The invitation waits in their app and they skip the queue. You're not told whose
+  number it was; you'll see them when they accept.
+- **By email or as a link.** For someone not on Smash Queue yet. Single-use, two weeks.
 
-**Who can find this community** sets whether it appears in the public directory. Private
-communities are reachable only by link or code. Either way, only members ever see sessions,
-the roster, scores or payments.
+Owners can also pick a role when inviting — coordinator, organizer or co-owner. Unused
+invitations are listed underneath, with **Withdraw**.
 
-### Co-organizers
+### Players without an account
 
-**Organizer → Members → Co-organizers** appoints someone to run the community with you. They
-need an email address — it's how they sign in. If they already play in the community, the
-account attaches to their existing record, so their rating and history stay in one piece.
-The app won't let the last organizer step down; appoint the next one first.
-
-### Giving somebody an account
-
-Add them as a member with their email, set the role, and they can sign themselves in — no
-password to set, invent or reset. To give one person two addresses, a personal and a work
-one, add both to the same member rather than creating a second entry. Two records for one
-human quietly breaks games played, fairness, the leaderboard and partner history all at
-once, and nothing warns you it has happened.
+Some people will never register. **Members → Add someone without an account** puts their
+name on the roster so they can be booked, checked in and put on court. If they later
+register on a phone they've been using as that name, their history comes with them.
 
 ### Venues
 
@@ -344,21 +348,50 @@ fees, venues and the leaderboard need an account.
 
 ---
 
-## 4a. For the platform admin
+## 4a. Owning a community
 
-The platform admin decides which communities exist and who runs them. That's all.
-Everything inside a community — venues, sessions, fees, members — belongs to its organizers.
+If you asked for a community and it was approved, you are its **owner**. The first time you
+open the organizer screens you'll see a short notice — read it, it matters:
 
-Open **Platform** from the home screen (or go to `/hq`). From there:
+- The community, its members and their records are **yours**.
+- Smash Queue will not share your members' details with any other community, will not
+  contact them about anything you didn't trigger, and has **no access** to your community —
+  platform administrators can't add organizers, remove members or take it over.
+- That also means there is **no admin rescue**. If you want a backup, make someone a
+  **co-owner** under Members.
 
-- **Start a community**: its name, where it plays, whether it's public, how people join,
-  and — in the same step — the organizer who will run it. The organizer gets an account at
-  once and signs in with a code sent to that address.
-- **Manage** a community: appoint or remove organizers, change visibility, replace its
-  invite code, or **Archive** it. Archiving hides it from members and the directory without
-  deleting anything, and **Restore** brings it back.
-- **Open** a community to see it exactly as its organizer does — useful when an organizer is
-  away and something needs fixing.
+Only owners can:
+
+- make someone an organizer, coordinator or co-owner (Members → the role next to each name),
+- approve **"Help run this community?"** requests from members,
+- choose whether the community is **public** — findable by any Smash Queue member, who can
+  see when and where you play but never who — or private,
+- **delete** the community: type its name to confirm. It disappears for everyone at once,
+  any owner can restore it from their profile for 30 days, and after that it is erased for
+  good.
+
+The last owner can't be removed or demoted — appoint another owner first.
+
+### Starting a community
+
+Any registered player can ask for one: **Profile → Start a community**, or
+**Communities → Start a community**. Tell us the name, where and when you play. Once it's
+approved you're its owner, and the answer shows up on your profile.
+
+---
+
+## 4b. For the platform admin
+
+The platform admin approves new communities, and that is almost all. Open **Platform** from
+your profile (or go to `/hq`):
+
+- **Requests to start a community** — approve or decline, with an optional note back. On
+  approval the requester becomes the owner.
+- **Totals** — how many communities, members and sessions. Counts only; no names.
+- **Suspend** — hides a community being used for something it shouldn't be, without touching
+  anything inside it. **Restore** undoes it.
+
+There is deliberately no way from here into any community.
 
 ---
 

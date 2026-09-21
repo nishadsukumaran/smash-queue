@@ -1,6 +1,7 @@
 import {
-  pgTable, text, integer, doublePrecision, boolean, timestamp, jsonb, index, uniqueIndex,
+  pgTable, pgSequence, text, integer, doublePrecision, boolean, timestamp, jsonb, index, uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Schema for the Badminton Queue & Game Management Platform.
@@ -14,6 +15,15 @@ const id = () => text("id").primaryKey();
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
 /* ------------------------------------------------------------------ users */
+
+/**
+ * Player numbers: 1001, 1002, ... A name tag for the door, never a key.
+ *
+ * Sequential on purpose so they are short and easy to say out loud, which
+ * also makes them guessable — so nothing is ever looked up or unlocked by
+ * number alone. No fixed width either: after 9999 they simply carry on.
+ */
+export const playerNoSeq = pgSequence("player_no_seq", { startWith: 1001 });
 
 export const users = pgTable(
   "users",
@@ -36,11 +46,22 @@ export const users = pgTable(
      * granting rights over another group's.
      */
     platformAdmin: boolean("platform_admin").notNull().default(false),
+    /** See playerNoSeq. Assigned by the database, never by the app. */
+    playerNo: integer("player_no").notNull().default(sql`nextval('player_no_seq')`),
+    /**
+     * When the person themselves confirmed their name and profile after
+     * registering. Null for roster entries an organizer typed in and for
+     * accounts that have not finished setting up.
+     */
+    onboardedAt: ts("onboarded_at"),
     createdAt: ts("created_at").notNull(),
   },
   // Postgres allows many NULLs under a unique index, so players without an
   // email are unaffected. It is sign-in identity, so it has to resolve to one row.
-  (t) => [uniqueIndex("users_email_idx").on(t.email)],
+  (t) => [
+    uniqueIndex("users_email_idx").on(t.email),
+    uniqueIndex("users_player_no_idx").on(t.playerNo),
+  ],
 );
 
 /* ----------------------------------------------------------------- groups */
@@ -90,6 +111,18 @@ export const groups = pgTable(
      * and an archived one still has to render its own past.
      */
     archivedAt: ts("archived_at"),
+    /**
+     * When the owner read and accepted the ownership notice. Recorded rather
+     * than just shown, so there is evidence of what they were told.
+     */
+    ownerAcceptedAt: ts("owner_accepted_at"),
+    /**
+     * The owner deleted it. Hidden from everyone at once; recoverable by an
+     * owner for 30 days; then purged for good. Distinct from archivedAt, which
+     * is the platform suspending a community for abuse.
+     */
+    deletedAt: ts("deleted_at"),
+    deletedBy: text("deleted_by"),
     createdAt: ts("created_at").notNull(),
   },
   (t) => [
@@ -119,6 +152,12 @@ export type GroupSettings = {
    *   closed   — the organizer adds everyone by hand
    */
   joinPolicy?: JoinPolicy;
+  /**
+   * For a public community: whether people who have not joined can see when
+   * and where it plays (never who). Defaults to yes — a join button with
+   * nothing behind it gives nobody a reason to press it.
+   */
+  previewSchedule?: boolean;
 };
 
 export type JoinPolicy = "open" | "approval" | "closed";
@@ -153,6 +192,13 @@ export const groupMembers = pgTable(
     decidedAt: ts("decided_at"),
     decidedBy: text("decided_by"),
     joinedAt: ts("joined_at").notNull(),
+    /**
+     * Rating inside this community only. Built from this community's games and
+     * never shown to another, which is what lets the app promise owners that
+     * their members' data stays theirs.
+     */
+    rating: doublePrecision("rating").notNull().default(1200),
+    ratingGames: integer("rating_games").notNull().default(0),
   },
   (t) => [
     index("gm_group_idx").on(t.groupId),
@@ -161,7 +207,14 @@ export const groupMembers = pgTable(
   ],
 );
 
-export type MemberRole = "player" | "coordinator" | "organizer";
+/**
+ * owner       — the community is theirs: appoints organizers and co-owners,
+ *               decides visibility, can delete it. Nobody outside can override.
+ * organizer   — runs it day to day: sessions, venues, members, money.
+ * coordinator — runs the court on the night.
+ * player      — plays.
+ */
+export type MemberRole = "player" | "coordinator" | "organizer" | "owner";
 export type MemberStatus = "active" | "inactive" | "pending" | "declined";
 
 /**
@@ -191,6 +244,12 @@ export const groupInvites = pgTable(
     /** Invites can appoint coordinators and organizers, not only players. */
     role: text("role").$type<MemberRole>().notNull().default("player"),
     invitedBy: text("invited_by").references(() => users.id),
+    /**
+     * Set when the invitation is addressed to an existing account (by player
+     * number). It then appears in that person's own inbox in the app, and only
+     * they can accept it.
+     */
+    userId: text("user_id").references(() => users.id),
     expiresAt: ts("expires_at").notNull(),
     acceptedAt: ts("accepted_at"),
     acceptedBy: text("accepted_by").references(() => users.id),
@@ -548,6 +607,88 @@ export const authSessions = pgTable(
   ],
 );
 
+/* -------------------------------------------------------- trusted devices */
+
+/**
+ * A phone that has proved itself once by email, and can now be unlocked with
+ * a short PIN.
+ *
+ * The PIN is only half of the credential; the other half is the long random
+ * token in this device's cookie. So a four-digit PIN is guessable only by
+ * somebody already holding the phone, and five wrong tries revoke the device
+ * back to email. Both halves are stored hashed.
+ */
+export const trustedDevices = pgTable(
+  "trusted_devices",
+  {
+    id: id(),
+    userId: text("user_id").notNull().references(() => users.id),
+    tokenHash: text("token_hash").notNull(),
+    /** scrypt of the PIN with this row's salt. Null until a PIN is chosen. */
+    pinHash: text("pin_hash"),
+    pinSalt: text("pin_salt"),
+    failedAttempts: integer("failed_attempts").notNull().default(0),
+    userAgent: text("user_agent"),
+    createdAt: ts("created_at").notNull(),
+    lastUsedAt: ts("last_used_at"),
+    revokedAt: ts("revoked_at"),
+  },
+  (t) => [
+    uniqueIndex("device_token_idx").on(t.tokenHash),
+    index("device_user_idx").on(t.userId),
+  ],
+);
+
+/* ------------------------------------------------------------- requests */
+
+/**
+ * Somebody asking to start a community. The platform admin approves or
+ * declines; on approval the requester becomes its owner. That is the whole of
+ * the platform's say over a community.
+ */
+export const communityRequests = pgTable(
+  "community_requests",
+  {
+    id: id(),
+    requesterId: text("requester_id").notNull().references(() => users.id),
+    name: text("name").notNull(),
+    location: text("location"),
+    description: text("description"),
+    /** Free text: where and when they play, roughly how many. */
+    details: text("details"),
+    status: text("status").$type<RequestStatus>().notNull().default("pending"),
+    decisionNote: text("decision_note"),
+    decidedBy: text("decided_by").references(() => users.id),
+    decidedAt: ts("decided_at"),
+    groupId: text("group_id").references(() => groups.id),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [index("creq_status_idx").on(t.status), index("creq_requester_idx").on(t.requesterId)],
+);
+
+/**
+ * A member asking for more responsibility inside their community. Only the
+ * community's owners can grant it — not other organizers, and not the
+ * platform.
+ */
+export const roleRequests = pgTable(
+  "role_requests",
+  {
+    id: id(),
+    groupId: text("group_id").notNull().references(() => groups.id),
+    userId: text("user_id").notNull().references(() => users.id),
+    role: text("role").$type<MemberRole>().notNull(),
+    note: text("note"),
+    status: text("status").$type<RequestStatus>().notNull().default("pending"),
+    decidedBy: text("decided_by").references(() => users.id),
+    decidedAt: ts("decided_at"),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [index("rreq_group_idx").on(t.groupId, t.status)],
+);
+
+export type RequestStatus = "pending" | "approved" | "declined" | "withdrawn";
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Match = typeof matches.$inferSelect;
@@ -561,3 +702,6 @@ export type AuthEmail = typeof authEmails.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type GroupInvite = typeof groupInvites.$inferSelect;
+export type TrustedDevice = typeof trustedDevices.$inferSelect;
+export type CommunityRequest = typeof communityRequests.$inferSelect;
+export type RoleRequest = typeof roleRequests.$inferSelect;

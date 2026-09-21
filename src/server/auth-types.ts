@@ -16,3 +16,15 @@ export type CodeState = {
 
 export const SIGN_IN_IDLE: SignInState = { status: "idle" };
 export const CODE_IDLE: CodeState = { status: "idle" };
+
+export type PinState = {
+  status: "idle" | "error" | "done";
+  message?: string;
+  /** The phone has been sent back to email sign-in. */
+  locked?: boolean;
+};
+
+export type WelcomeState = { status: "idle" | "error"; message?: string };
+
+export const PIN_IDLE: PinState = { status: "idle" };
+export const WELCOME_IDLE: WelcomeState = { status: "idle" };
