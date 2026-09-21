@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { MemberGate, canSeeSession } from "@/components/MemberGate";
 import { notFound } from "next/navigation";
+import type { CSSProperties } from "react";
 import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { Elapsed } from "@/components/Elapsed";
+import { Shuttle } from "@/components/Shuttle";
+import { CountUp } from "@/components/motion/CountUp";
+import { WinBurst, lastFinished } from "@/components/motion/WinBurst";
 import { getBoard, getSessionByCode, listAnnouncements } from "@/server/queries";
 import { currentUserId, isStaffFor } from "@/lib/identity";
 import { canStaff, currentAccount } from "@/lib/auth";
@@ -15,6 +19,9 @@ import { estimateQueuePosition } from "@/lib/queue-engine";
 import { clockTime, money, minutesSince } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
+
+/** Stagger index, kept out of the markup so the JSX stays readable. */
+const step = (i: number) => ({ "--i": i }) as CSSProperties;
 
 export default async function SessionPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
@@ -65,9 +72,12 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
     ? (myMatch.teamA.some((p) => p.id === userId) ? myMatch.teamB : myMatch.teamA)
     : [];
 
+  const justFinished = isLive ? lastFinished(board.matches) : null;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-6">
       {isLive && <LiveRefresh seconds={6} />}
+      {isLive && <WinBurst match={justFinished} />}
 
       <Announcements
         rows={notices}
@@ -79,7 +89,7 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
       />
 
       {!userId && (
-        <div className="card border-shuttle/40 p-4">
+        <div className="card rise border-shuttle/40 p-4">
           <p className="text-sm font-semibold">First, who are you?</p>
           <p className="mt-1 text-sm text-muted">
             Tap your name from the group list, or add yourself if you&apos;re new. No password,
@@ -93,135 +103,192 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
 
       {/* ------------------------------------------------ your status ---- */}
       {userId && (
-        <section className="card p-4">
-          <p className="label">Your status</p>
-
+        <>
           {myMatch ? (
-            <div className="mt-2">
-              <div className="flex items-center gap-2">
-                <span className="chip chip-live">
-                  {myMatch.status === "playing" ? "Playing now" : "You're up"}
-                </span>
-                <span className="text-lg font-extrabold">Court {myMatch.court}</span>
-                {myMatch.startedAt && (
-                  <span className="ml-auto text-sm text-muted">
-                    <Elapsed since={myMatch.startedAt.getTime()} />
+            /*
+             * The one screen state that has to work from three metres away,
+             * held at arm's length, in a hall with the lights on. Court number
+             * is the largest thing on the phone for a reason.
+             */
+            <section className="court court-live celebrate rise p-5">
+              <div className="relative">
+                <div className="flex items-center gap-2">
+                  <span className="live-dot" />
+                  <span className="chip chip-live">
+                    {myMatch.status === "playing" ? "Playing now" : "You're up"}
                   </span>
-                )}
-              </div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="label">With you</p>
-                  {partner && (
-                    <div className="mt-1 flex items-center gap-2">
-                      <Avatar name={partner.name} size={28} />
-                      <span className="text-sm font-semibold">{partner.name}</span>
-                    </div>
+                  {myMatch.startedAt && (
+                    <span className="ml-auto text-sm font-semibold text-shuttle tabular">
+                      <Elapsed since={myMatch.startedAt.getTime()} />
+                    </span>
                   )}
                 </div>
-                <div>
+
+                <div className="mt-3 flex items-baseline gap-3">
+                  <span className="text-[.66rem] uppercase tracking-[.22em] text-muted">Court</span>
+                  <span className="pop text-6xl font-extrabold leading-none tracking-tight text-shuttle">
+                    {myMatch.court}
+                  </span>
+                  <span className="ml-auto text-shuttle/70 shuttle-spin">
+                    <Shuttle size={26} />
+                  </span>
+                </div>
+
+                <div className="mt-5 rounded-xl border border-line/70 bg-ink/40 p-3">
+                  <p className="label">With you</p>
+                  {partner ? (
+                    <div className="mt-1.5 flex items-center gap-2 rise" style={step(1)}>
+                      <Avatar name={partner.name} size={32} onCourt />
+                      <span className="text-base font-bold">{partner.name}</span>
+                    </div>
+                  ) : (
+                    <p className="mt-1.5 text-sm text-muted">Just you so far.</p>
+                  )}
+
+                  <div className="court-net my-3" />
+
                   <p className="label">Against</p>
-                  <div className="mt-1 space-y-1">
-                    {opponents.map((p) => (
-                      <div key={p.id} className="flex items-center gap-2">
-                        <Avatar name={p.name} size={28} dim />
-                        <span className="text-sm">{p.name}</span>
-                      </div>
+                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5">
+                    {opponents.map((p, i) => (
+                      <span key={p.id} className="flex items-center gap-2 rise" style={step(i + 2)}>
+                        <Avatar name={p.name} size={28} />
+                        <span className="text-sm font-semibold">{p.name}</span>
+                      </span>
                     ))}
                   </div>
                 </div>
-              </div>
-            </div>
-          ) : me?.checkedInAt ? (
-            <div className="mt-2">
-              <div className="flex items-center gap-2">
-                <span className={`chip ${me.availability === "available" ? "chip-teal" : "chip-amber"}`}>
-                  {me.availability === "available" ? "Waiting" : me.availability === "resting" ? "Resting" : "Left"}
-                </span>
-                {queue && me.availability === "available" && (
-                  <span className="text-sm font-semibold text-shuttle">{queue.label}</span>
-                )}
-              </div>
-              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                <Stat label="Games" value={String(me.gamesPlayed)} />
-                <Stat label="Waiting" value={`${minutesSince(me.lastFinishedAt ?? me.checkedInAt)}m`} />
-                <Stat
-                  label="Fewer games"
-                  value={String(
-                    board.roster.filter(
-                      (r) => r.checkedInAt && r.availability !== "left" && r.gamesPlayed < me.gamesPlayed,
-                    ).length,
-                  )}
-                />
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {me.availability === "available" ? (
-                  <form action={availabilityAction}>
-                    <input type="hidden" name="sessionId" value={session.id} />
-                    <input type="hidden" name="availability" value="resting" />
-                    <SubmitButton className="btn btn-ghost btn-sm">Sit out a game</SubmitButton>
-                  </form>
-                ) : (
-                  <form action={availabilityAction}>
-                    <input type="hidden" name="sessionId" value={session.id} />
-                    <input type="hidden" name="availability" value="available" />
-                    <SubmitButton className="btn btn-teal btn-sm">I&apos;m back in</SubmitButton>
-                  </form>
-                )}
-                <form action={availabilityAction}>
-                  <input type="hidden" name="sessionId" value={session.id} />
-                  <input type="hidden" name="availability" value="left" />
-                  <SubmitButton className="btn btn-danger btn-sm">Heading home</SubmitButton>
-                </form>
-              </div>
-              <p className="mt-3 text-xs text-muted">
-                Checked in at {clockTime(me.checkedInAt)} &middot; Fee{" "}
-                {me.paymentStatus === "paid" ? (
-                  <span className="text-teal">paid</span>
-                ) : me.paymentStatus === "waived" ? (
-                  <span className="text-muted">waived</span>
-                ) : (
-                  <span className="text-amber">{money(session.fee, session.currency)} pending</span>
-                )}
-              </p>
-            </div>
-          ) : (
-            <div className="mt-2">
-              {me?.bookingStatus === "confirmed" || me?.bookingStatus === "waitlisted" ? (
-                <p className="text-sm text-muted">
-                  {me.bookingStatus === "waitlisted"
-                    ? `You are number ${me.waitlistPosition} on the waitlist.`
-                    : "You are booked in. Scan the QR code at the venue to check in."}
-                </p>
-              ) : (
-                <p className="text-sm text-muted">You have not booked this session yet.</p>
-              )}
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                {!me || me.bookingStatus === "cancelled" || me.bookingStatus === "no_show" ? (
-                  <form action={joinAction}>
-                    <input type="hidden" name="sessionId" value={session.id} />
-                    <SubmitButton className="btn btn-primary" pendingLabel="Booking...">
-                      {confirmed.length >= session.capacity ? "Join waitlist" : "Join session"}
-                    </SubmitButton>
-                  </form>
-                ) : (
-                  <form action={cancelAction}>
-                    <input type="hidden" name="sessionId" value={session.id} />
-                    <SubmitButton className="btn btn-danger btn-sm">Cancel my slot</SubmitButton>
-                  </form>
-                )}
-                {isLive && (
-                  <form action={checkInAction}>
-                    <input type="hidden" name="sessionId" value={session.id} />
-                    <input type="hidden" name="method" value="self" />
-                    <SubmitButton className="btn btn-teal">I&apos;m at the venue</SubmitButton>
-                  </form>
-                )}
+                <p className="mt-3 text-center text-xs text-muted">
+                  {myMatch.status === "playing"
+                    ? `First to ${session.pointsTo}. Good luck.`
+                    : "Head to the court, the coordinator is about to start you."}
+                </p>
               </div>
-            </div>
+            </section>
+          ) : (
+            <section className="card rise p-4">
+              <p className="label">Your status</p>
+
+              {me?.checkedInAt ? (
+                <div className="mt-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`chip ${me.availability === "available" ? "chip-teal" : "chip-amber"}`}
+                    >
+                      {me.availability === "available"
+                        ? "Waiting"
+                        : me.availability === "resting"
+                          ? "Resting"
+                          : "Left"}
+                    </span>
+                    {queue && me.availability === "available" && (
+                      <span className="text-sm font-bold text-shuttle">{queue.label}</span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <Stat label="Games" value={me.gamesPlayed} i={0} />
+                    <Stat
+                      label="Waiting"
+                      value={minutesSince(me.lastFinishedAt ?? me.checkedInAt)}
+                      suffix="m"
+                      i={1}
+                    />
+                    <Stat
+                      label="Fewer games"
+                      value={
+                        board.roster.filter(
+                          (r) =>
+                            r.checkedInAt &&
+                            r.availability !== "left" &&
+                            r.gamesPlayed < me.gamesPlayed,
+                        ).length
+                      }
+                      i={2}
+                    />
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {me.availability === "available" ? (
+                      <form action={availabilityAction}>
+                        <input type="hidden" name="sessionId" value={session.id} />
+                        <input type="hidden" name="availability" value="resting" />
+                        <SubmitButton className="btn btn-ghost btn-sm">Sit out a game</SubmitButton>
+                      </form>
+                    ) : (
+                      <form action={availabilityAction}>
+                        <input type="hidden" name="sessionId" value={session.id} />
+                        <input type="hidden" name="availability" value="available" />
+                        <SubmitButton className="btn btn-teal btn-sm" haptic="confirm">
+                          I&apos;m back in
+                        </SubmitButton>
+                      </form>
+                    )}
+                    <form action={availabilityAction}>
+                      <input type="hidden" name="sessionId" value={session.id} />
+                      <input type="hidden" name="availability" value="left" />
+                      <SubmitButton className="btn btn-danger btn-sm">Heading home</SubmitButton>
+                    </form>
+                  </div>
+
+                  <p className="mt-3 text-xs text-muted">
+                    Checked in at {clockTime(me.checkedInAt)} &middot; Fee{" "}
+                    {me.paymentStatus === "paid" ? (
+                      <span className="text-teal">paid</span>
+                    ) : me.paymentStatus === "waived" ? (
+                      <span className="text-muted">waived</span>
+                    ) : (
+                      <span className="text-amber">
+                        {money(session.fee, session.currency)} pending
+                      </span>
+                    )}
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-2">
+                  {me?.bookingStatus === "confirmed" || me?.bookingStatus === "waitlisted" ? (
+                    <p className="text-sm text-muted">
+                      {me.bookingStatus === "waitlisted"
+                        ? `You are number ${me.waitlistPosition} on the waitlist.`
+                        : "You are booked in. Scan the QR code at the venue to check in."}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted">You have not booked this session yet.</p>
+                  )}
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {!me || me.bookingStatus === "cancelled" || me.bookingStatus === "no_show" ? (
+                      <form action={joinAction}>
+                        <input type="hidden" name="sessionId" value={session.id} />
+                        <SubmitButton
+                          className="btn btn-primary"
+                          pendingLabel="Booking..."
+                          haptic="confirm"
+                        >
+                          {confirmed.length >= session.capacity ? "Join waitlist" : "Join session"}
+                        </SubmitButton>
+                      </form>
+                    ) : (
+                      <form action={cancelAction}>
+                        <input type="hidden" name="sessionId" value={session.id} />
+                        <SubmitButton className="btn btn-danger btn-sm">Cancel my slot</SubmitButton>
+                      </form>
+                    )}
+                    {isLive && (
+                      <form action={checkInAction}>
+                        <input type="hidden" name="sessionId" value={session.id} />
+                        <input type="hidden" name="method" value="self" />
+                        <SubmitButton className="btn btn-teal" haptic="confirm">
+                          I&apos;m at the venue
+                        </SubmitButton>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
           )}
-        </section>
+        </>
       )}
 
       {/* ---------------------------------------------------- courts ----- */}
@@ -234,27 +301,31 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
             </span>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            {board.courts.map((c) => (
-              <div key={c.court} className={`court p-4 ${c.match ? "court-live" : ""}`}>
-                <div className="flex items-center gap-2">
+            {board.courts.map((c, i) => (
+              <div
+                key={c.court}
+                className={`court rise p-4 ${c.match ? "court-live" : "court-open"}`}
+                style={step(i)}
+              >
+                <div className="relative flex items-center gap-2">
                   <span className="text-sm font-extrabold">Court {c.court}</span>
                   <span className={`chip ${c.match ? "chip-live" : "chip-teal"}`}>
                     {c.match ? (c.match.status === "playing" ? "Playing" : "Starting") : "Open"}
                   </span>
                   {c.match?.startedAt && (
-                    <span className="ml-auto text-xs text-muted">
+                    <span className="ml-auto text-xs text-muted tabular">
                       <Elapsed since={c.match.startedAt.getTime()} />
                     </span>
                   )}
                 </div>
                 {c.match ? (
-                  <div className="mt-3 space-y-2">
-                    <TeamLine players={c.match.teamA} />
+                  <div className="relative mt-3 space-y-2">
+                    <TeamLine players={c.match.teamA} highlight={userId} />
                     <div className="court-net" />
-                    <TeamLine players={c.match.teamB} />
+                    <TeamLine players={c.match.teamB} highlight={userId} />
                   </div>
                 ) : (
-                  <p className="mt-4 text-sm text-muted">Waiting for the coordinator.</p>
+                  <p className="relative mt-4 text-sm text-muted">Waiting for the coordinator.</p>
                 )}
               </div>
             ))}
@@ -265,23 +336,41 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
       {/* -------------------------------------------------- next up ------ */}
       {isLive && board.ranked.length > 0 && (
         <section className="card p-4">
-          <h2 className="label">Next up</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="label">Next up</h2>
+            <span className="ml-auto text-[.65rem] uppercase tracking-wider text-muted">
+              fewest games first
+            </span>
+          </div>
           <ol className="mt-2 space-y-1">
-            {board.ranked.slice(0, 8).map((r, i) => (
-              <li
-                key={r.player.id}
-                className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${
-                  r.player.id === userId ? "bg-surface-2" : ""
-                }`}
-              >
-                <span className="w-5 text-xs text-muted tabular">{i + 1}</span>
-                <Avatar name={r.player.name} size={24} dim />
-                <span className="min-w-0 flex-1 truncate text-sm">{r.player.name}</span>
-                <span className="text-xs text-muted tabular">
-                  {r.player.gamesPlayed} games &middot; {Math.round(r.waitedMs / 60000)}m
-                </span>
-              </li>
-            ))}
+            {board.ranked.slice(0, 8).map((r, i) => {
+              const mine = r.player.id === userId;
+              return (
+                <li
+                  key={r.player.id}
+                  className={`rise flex items-center gap-2 rounded-xl px-2 py-1.5 ${
+                    mine ? "queue-me" : ""
+                  }`}
+                  style={step(i)}
+                >
+                  <span
+                    className={`w-5 text-center text-xs tabular ${
+                      i === 0 ? "font-bold text-shuttle" : "text-muted"
+                    }`}
+                  >
+                    {i + 1}
+                  </span>
+                  <Avatar name={r.player.name} size={24} dim={!mine} />
+                  <span className={`min-w-0 flex-1 truncate text-sm ${mine ? "font-bold" : ""}`}>
+                    {r.player.name}
+                    {mine && <span className="ml-1.5 text-xs text-shuttle">you</span>}
+                  </span>
+                  <span className="text-xs text-muted tabular">
+                    {r.player.gamesPlayed} games &middot; {Math.round(r.waitedMs / 60000)}m
+                  </span>
+                </li>
+              );
+            })}
           </ol>
         </section>
       )}
@@ -294,9 +383,18 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
           </h2>
         </div>
         <div className="mt-2 grid gap-1 sm:grid-cols-2">
-          {confirmed.map((r) => (
-            <div key={r.userId} className="flex items-center gap-2 rounded-lg px-1 py-1">
-              <Avatar name={r.name} size={26} dim={!r.checkedInAt} />
+          {confirmed.map((r, i) => (
+            <div
+              key={r.userId}
+              className="rise flex items-center gap-2 rounded-lg px-1 py-1"
+              style={step(Math.min(i, 16))}
+            >
+              <Avatar
+                name={r.name}
+                size={26}
+                dim={!r.checkedInAt}
+                onCourt={isLive && r.onCourt !== null}
+              />
               <span className="min-w-0 flex-1 truncate text-sm">{r.name}</span>
               {isLive &&
                 (r.onCourt !== null ? (
@@ -326,31 +424,52 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
         )}
       </section>
 
-      <p className="text-center text-xs text-muted">
+      <p className="safe-bottom text-center text-xs text-muted">
         Share this session: <span className="font-mono text-chalk">/s/{session.code}</span>
       </p>
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  suffix = "",
+  i = 0,
+}: {
+  label: string;
+  value: number;
+  suffix?: string;
+  i?: number;
+}) {
   return (
-    <div className="rounded-xl border border-line bg-court p-2">
-      <p className="text-lg font-extrabold tabular">{value}</p>
+    <div className="pop rounded-xl border border-line bg-court p-2" style={step(i)}>
+      <p className="text-lg font-extrabold">
+        <CountUp value={value} suffix={suffix} />
+      </p>
       <p className="text-[.62rem] uppercase tracking-wider text-muted">{label}</p>
     </div>
   );
 }
 
-function TeamLine({ players }: { players: { id: string; name: string }[] }) {
+function TeamLine({
+  players,
+  highlight,
+}: {
+  players: { id: string; name: string }[];
+  highlight?: string | null;
+}) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      {players.map((p) => (
-        <span key={p.id} className="flex items-center gap-1.5">
-          <Avatar name={p.name} size={22} />
-          <span className="text-sm font-semibold">{p.name}</span>
-        </span>
-      ))}
+      {players.map((p) => {
+        const mine = p.id === highlight;
+        return (
+          <span key={p.id} className="flex items-center gap-1.5">
+            <Avatar name={p.name} size={22} onCourt={mine} />
+            <span className={`text-sm font-semibold ${mine ? "text-shuttle" : ""}`}>{p.name}</span>
+          </span>
+        );
+      })}
     </div>
   );
 }
