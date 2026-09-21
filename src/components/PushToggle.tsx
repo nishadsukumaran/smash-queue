@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { removePushSubscription, savePushSubscription, sendTestPush } from "@/server/push-actions";
+import { removePushSubscription, sendTestPush } from "@/server/push-actions";
+import { enablePush, pushSupport } from "@/lib/push-client";
 
 /**
  * Turning notifications on for this phone.
@@ -22,70 +23,29 @@ type State =
   | "on"
   | "working";
 
-const KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
-
-function urlBase64ToUint8Array(base64: string) {
-  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
-  const raw = atob((base64 + padding).replace(/-/g, "+").replace(/_/g, "/"));
-  const out = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
-}
-
 export function PushToggle() {
   const [state, setState] = useState<State>("checking");
   const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      const ua = navigator.userAgent;
-      const ios = /iPhone|iPad|iPod/.test(ua);
-      const standalone =
-        window.matchMedia("(display-mode: standalone)").matches ||
-        (navigator as unknown as { standalone?: boolean }).standalone === true;
-
-      if (!KEY) return setState("not-configured");
-      if (ios && !standalone) return setState("ios-install");
-      if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window))
-        return setState("unsupported");
-      if (Notification.permission === "denied") return setState("blocked");
-
-      const reg = await navigator.serviceWorker.getRegistration("/");
-      const sub = await reg?.pushManager.getSubscription();
-      setState(sub ? "on" : "off");
-    })().catch(() => setState("unsupported"));
+    pushSupport()
+      .then(setState)
+      .catch(() => setState("unsupported"));
   }, []);
 
   async function enable() {
     setState("working");
     setNote(null);
-    try {
-      const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-      await navigator.serviceWorker.ready;
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setState(permission === "denied" ? "blocked" : "off");
-        return;
-      }
-      const sub =
-        (await reg.pushManager.getSubscription()) ??
-        (await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(KEY),
-        }));
-      const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
-      const res = await savePushSubscription(json);
-      if (!res.ok) {
-        setNote("Couldn't save that. Are you still signed in?");
-        setState("off");
-        return;
-      }
+    const { result, testSent } = await enablePush();
+    if (result === "on") {
       setState("on");
-      const test = await sendTestPush();
-      setNote(test.ok ? "Sent you a test notification." : "On — the test didn't arrive yet; give it a moment.");
-    } catch {
-      setNote("This browser wouldn't allow notifications.");
+      setNote(testSent ? "Sent you a test notification." : "On — the test didn't arrive yet; give it a moment.");
+    } else if (result === "blocked") {
+      setState("blocked");
+    } else {
       setState("off");
+      if (result === "not-saved") setNote("Couldn't save that. Are you still signed in?");
+      if (result === "failed") setNote("This browser wouldn't allow notifications.");
     }
   }
 

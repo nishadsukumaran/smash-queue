@@ -6,6 +6,8 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { APP_NAME, RELEASE_CHANNEL } from "@/lib/brand";
 import { Avatar } from "@/components/Avatar";
 import { currentUserId, staffGroups } from "@/lib/identity";
+import { sessionUserId } from "@/lib/auth";
+import { PushNudge } from "@/components/PushNudge";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -35,7 +37,7 @@ async function me() {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [user, staff] = await Promise.all([me(), staffGroups()]);
+  const [user, staff, signedIn] = await Promise.all([me(), staffGroups(), sessionUserId()]);
 
   return (
     <html lang="en">
@@ -76,7 +78,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-5xl px-4 pt-4">{children}</main>
+        <main className="mx-auto w-full max-w-5xl px-4 pt-4">
+          {signedIn && (
+            <div className="mb-4 empty:hidden">
+              <PushNudge reason="app" />
+            </div>
+          )}
+          {children}
+        </main>
         <SiteFooter />
       </body>
     </html>

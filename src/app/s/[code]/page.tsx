@@ -15,6 +15,7 @@ import { currentUserId, isStaffFor } from "@/lib/identity";
 import { canStaff, currentAccount } from "@/lib/auth";
 import { markAnnouncementsRead } from "@/server/actions";
 import { Announcements } from "@/components/Announcements";
+import { PushNudge } from "@/components/PushNudge";
 import { availabilityAction, cancelAction, checkInAction, joinAction } from "@/server/form-actions";
 import { estimateQueuePosition } from "@/lib/queue-engine";
 import { clockTime, money, minutesSince } from "@/lib/format";
@@ -100,6 +101,10 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
             Pick your name
           </Link>
         </div>
+      )}
+
+      {account && (me?.bookingStatus === "confirmed" || me?.bookingStatus === "waitlisted") && (
+        <PushNudge reason="booked" />
       )}
 
       {/* ------------------------------------------------ your status ---- */}
