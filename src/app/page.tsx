@@ -13,7 +13,8 @@ import {
   type BoardData, type PlayerView, type RosterEntry,
 } from "@/server/queries";
 import { currentUserId, isStaffFor } from "@/lib/identity";
-import { canStaff, currentAccount } from "@/lib/auth";
+import { canStaff, currentAccount, isPlatformAdmin } from "@/lib/auth";
+import { SUPPORT_EMAIL, supportMailto } from "@/lib/brand";
 import { activeCommunity, myCommunities } from "@/lib/tenant";
 import { markAnnouncementsRead } from "@/server/actions";
 import { clockTime, minutesSince, money, prettyDate, prettyDateTime, prettyTime, TIME_ZONE } from "@/lib/format";
@@ -78,7 +79,9 @@ export default async function Home() {
           {!userId && <Link href="/who" className="btn btn-primary">Pick your name</Link>}
           <Link href="/guide" className="btn btn-ghost">How it works</Link>
           <Link href="/members" className="btn btn-ghost">Members</Link>
-          <Link href="/admin" className="btn btn-ghost">{staff ? "Organizer" : "Organizer sign in"}</Link>
+          <Link href="/communities" className="btn btn-ghost">Communities</Link>
+          <Link href="/admin" className="btn btn-ghost">{staff || canStaff(account, group.id) ? "Organizer" : "Organizer sign in"}</Link>
+          {isPlatformAdmin(account) && <Link href="/hq" className="btn btn-ghost">Platform</Link>}
         </div>
       </div>
 
@@ -186,7 +189,7 @@ export default async function Home() {
                   <FairnessRing score={score} />
                   <div className="min-w-0">
                     <div className="text-sm font-bold leading-tight">{s.name}</div>
-                    <div className="mt-0.5 text-xs text-muted">{prettyDate(s.date)} · {b?.checkedInCount ?? 0} played</div>
+                    <div className="mt-0.5 text-xs text-muted">{prettyDate(s.date)} · {b?.roster.filter((r) => r.checkedInAt).length ?? 0} played</div>
                   </div>
                 </Link>
               );
@@ -194,6 +197,12 @@ export default async function Home() {
           </div>
         </section>
       )}
+
+      <p className="px-1 pb-2 text-xs text-muted">
+        Something not right? Tell us at{" "}
+        <a href={supportMailto("Feedback")} className="text-teal hover:underline">{SUPPORT_EMAIL}</a>{" "}
+        and it gets fixed.
+      </p>
     </div>
   );
 }
@@ -234,8 +243,14 @@ function LiveCard({ session: s, board, venue }: { session: BoardData["session"];
                 <span className="font-mono font-semibold tracking-normal text-muted">{m ? (m.status === "playing" ? clockTime(m.startedAt) : "starting") : rec ? "next" : "open"}</span>
               </div>
               <div className="grid grid-cols-2 gap-1.5 text-xs font-semibold leading-tight text-chalk">
-                <div>{a[0]}<br />{a[1]}</div>
-                <div className="text-right">{b[0]}<br />{b[1]}</div>
+                <div className="min-w-0">
+                  <TileName name={a[0]} />
+                  <TileName name={a[1]} />
+                </div>
+                <div className="min-w-0 text-right">
+                  <TileName name={b[0]} />
+                  <TileName name={b[1]} />
+                </div>
               </div>
               <div className="court-net" />
             </div>
@@ -249,6 +264,18 @@ function LiveCard({ session: s, board, venue }: { session: BoardData["session"];
         <span className="ml-auto text-sm font-bold text-shuttle">Open session →</span>
       </div>
     </Link>
+  );
+}
+
+/** Full name where there is room; just the first name on a phone, where four share a tile. */
+function TileName({ name }: { name: string | undefined }) {
+  if (!name) return <div>{"\u00a0"}</div>;
+  const short = name.trim().split(/\s+/)[0];
+  return (
+    <div className="truncate" title={name}>
+      <span className="sm:hidden">{short}</span>
+      <span className="hidden sm:inline">{name}</span>
+    </div>
   );
 }
 

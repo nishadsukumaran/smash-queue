@@ -407,7 +407,13 @@ export async function getBoard(sessionId: string, now = Date.now()): Promise<Boa
     ranked,
     checkedInCount: checkedIn.length,
     availableCount: ranked.length,
-    fairness: fairnessScore(played),
+    // While a session runs, fairness is about who is still here. Once it is
+    // closed, it is about everyone who came, including those who left early.
+    fairness: fairnessScore(
+      session.status === "closed"
+        ? roster.filter((r) => r.checkedInAt).map((r) => r.gamesPlayed)
+        : played,
+    ),
     totals: { expected, collected, outstanding: Math.max(0, expected - collected), unpaid },
     prefs,
     now,
