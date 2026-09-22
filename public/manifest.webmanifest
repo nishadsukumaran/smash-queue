@@ -1,6 +1,6 @@
 {
   "name": "Smash Queue",
-  "short_name": "SmashQueue",
+  "short_name": "SmashQ",
   "description": "Book. Check in. Queue. Play. Built by AIOps.",
   "start_url": "/",
   "scope": "/",

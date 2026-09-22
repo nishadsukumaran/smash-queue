@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import "./globals.css";
-import { Shuttle } from "@/components/Shuttle";
+import { LogoMark } from "@/components/Logo";
+import { brandFont } from "@/fonts/brand";
 import { SiteFooter } from "@/components/SiteFooter";
 import { APP_NAME, RELEASE_CHANNEL } from "@/lib/brand";
 import { Avatar } from "@/components/Avatar";
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   // iOS ignores the manifest's icons for the home screen; it wants this.
   icons: { apple: "/apple-touch-icon.png" },
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Smash Queue" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "SmashQ" },
 };
 
 export const viewport: Viewport = {
@@ -48,11 +49,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               href="/"
               className="group flex shrink-0 items-center gap-2 font-extrabold tracking-tight"
             >
-              <span className="text-shuttle transition-transform duration-300 group-hover:-rotate-[25deg] group-active:scale-90">
-                <Shuttle size={24} />
+              <span className="transition-transform duration-300 group-hover:-rotate-[20deg] group-active:scale-90">
+                <LogoMark size={28} />
               </span>
-              <span className="text-[1.02rem]">
-                Smash<span className="text-shuttle">Queue</span>
+              <span className={`${brandFont.className} text-[1.3rem] leading-none tracking-[-0.035em] text-[#F5F3EC]`}>
+                Smash<span className="text-[#C8F031]">Q</span>
               </span>
             </Link>
             {RELEASE_CHANNEL && (
