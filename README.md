@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/images/banner.png" alt="Smash Queue — book, check in, queue, play" width="100%">
+<img src="docs/images/banner.png" alt="SmashQ — book, check in, queue, play" width="100%">
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-1.0.0-D7F75B?style=for-the-badge&labelColor=0A1A15)](https://github.com/nishadsukumaran/smash-queue/releases)
+[![Version](https://img.shields.io/badge/version-1.1.0-C8F031?style=for-the-badge&labelColor=0A1A15)](https://github.com/nishadsukumaran/smash-queue/releases)
 [![Live](https://img.shields.io/badge/live-smashq.aiopsgroup.ai-3DD9A4?style=for-the-badge&labelColor=0A1A15)](https://smashq.aiopsgroup.ai)
 [![Tests](https://img.shields.io/badge/tests-38%20passing-3DD9A4?style=for-the-badge&labelColor=0A1A15)](#prove-it-yourself)
 [![Fairness](https://img.shields.io/badge/games%20spread-%E2%89%A4%201-D7F75B?style=for-the-badge&labelColor=0A1A15)](#the-queue-engine)
@@ -18,9 +18,10 @@
 [![Neon](https://img.shields.io/badge/Neon%20Postgres-00E599?style=flat-square&logo=postgresql&logoColor=black)](https://neon.tech)
 [![Vercel](https://img.shields.io/badge/Vercel%20fra1-000000?style=flat-square&logo=vercel&logoColor=white)](https://vercel.com)
 
-**A mobile-first badminton session manager for real WhatsApp groups.**<br>
-Fair rotation across multiple courts, QR check-in, payment tracking, and a session summary<br>
-that tells you whether the night was actually fair — not just whether it felt fair.
+**SmashQ — a mobile-first badminton app for real communities.**<br>
+Accounts for every player, communities their owners actually own, fair rotation across courts,<br>
+QR check-in, push notifications, payments, and a session summary that tells you whether<br>
+the night was actually fair — not just whether it felt fair.
 
 <sub>Built by **[AIOps](https://aiops.ae)** · support **hello@aiops.ae** · built to PRD v1.0</sub>
 
@@ -31,7 +32,7 @@ that tells you whether the night was actually fair — not just whether it felt 
 ## The problem, in one line
 
 One person with a whiteboard decides who plays next, and by 9pm half the hall thinks they
-have been skipped. Smash Queue replaces the whiteboard with a queue engine that can be
+have been skipped. SmashQ (Smash Queue) replaces the whiteboard with a queue engine that can be
 audited, and gives everyone a phone screen that answers *"when am I next?"* without asking.
 
 <table>
@@ -39,8 +40,9 @@ audited, and gives everyone a phone screen that answers *"when am I next?"* with
 <td width="33%" valign="top">
 
 ### 🏸 For players
-Tap your name, join the session, scan the QR at the door. Your phone then shows games
-played, minutes waiting, and roughly how far off your next game is.
+Sign in once with a 4-digit email code, then just a PIN. Book, scan the QR at the door, and
+your phone shows games played, minutes waiting and your place in the queue, and buzzes
+when you're up.
 
 </td>
 <td width="33%" valign="top">
@@ -52,13 +54,30 @@ line explaining why. Start. Finish. Next.
 </td>
 <td width="33%" valign="top">
 
-### 💰 For organizers
-Sessions, members, venues, fees. Expected vs collected vs outstanding, minus court hire and
-shuttles, settled before everyone leaves. Behind an account, not a PIN.
+### 💰 For owners and organizers
+Your community is yours: members, sessions, venues, fees, invitations. Expected vs collected
+vs outstanding, settled before everyone leaves. The platform can't see in or take over.
 
 </td>
 </tr>
 </table>
+
+---
+
+## New in v1.1
+
+| | |
+| :--- | :--- |
+| 🎨 **New brand** | The Shuttle Q mark and SmashQ wordmark, in the app and as a full kit in [`docs/brand`](docs/brand) |
+| 👤 **Accounts for everyone** | Any player registers with an email code; every account gets a player number (#1001 on) and a phone PIN |
+| 🏘️ **Owner-run communities** | Players ask for a community, the platform approves, the requester owns it. Public or private, open, approval or invite-only |
+| 🔔 **Push notifications** | Put on court, waitlist spot, community notices, invitations, and a reminder on the day. One tap to switch on |
+| 🔑 **Short codes, safely** | 4-digit sign-in codes and 4-character invite codes, with daily and hourly guess limits behind them |
+| 🛡️ **PIN control** | Owners can switch the shared coordinator PIN off; ten wrong guesses in an hour lock it |
+| 🏠 **New home screen** | Live court card, "you tonight", upcoming sessions, notices and recent fairness at a glance |
+| 🐛 **Fixes** | Live board crash, iPhone status-bar overlap in the home-screen app, honest counts for players who leave early |
+
+Full notes: [releases](https://github.com/nishadsukumaran/smash-queue/releases).
 
 ---
 
@@ -82,7 +101,7 @@ shuttles, settled before everyone leaves. Behind an account, not a PIN.
 
 <img src="docs/images/status-mobile.png" alt="Player status on a phone" width="64%">
 
-<sub>Games, wait, position. No signup, no password.</sub>
+<sub>Games, wait, position, and a buzz when you're up.</sub>
 
 </td>
 <td width="50%" valign="top" align="center">
@@ -115,16 +134,41 @@ shuttles, settled before everyone leaves. Behind an account, not a PIN.
 
 </td>
 </tr>
+<tr>
+<td width="50%" valign="top" align="center">
+
+**Your profile — every community in one place**
+
+<img src="docs/images/me-mobile.png" alt="Player profile with player number and communities" width="64%">
+
+<sub>Player number, form, per-community rating, notifications.</sub>
+
+</td>
+<td width="50%" valign="top" align="center">
+
+**Communities — find one, or join with a code**
+
+<img src="docs/images/communities-mobile.png" alt="Community directory and join-by-code" width="64%">
+
+<sub>Public communities, the 4-character code box, and "start your own".</sub>
+
+</td>
+</tr>
 </table>
 
 <details>
-<summary><b>More screens</b> — landing page and the in-app guide</summary>
+<summary><b>More screens</b> — home, platform console and the in-app guide</summary>
 <br>
 
-| Landing page | In-app user guide |
+| Home | Platform console |
 | :---: | :---: |
-| <img src="docs/images/home.png" alt="Landing page" width="100%"> | <img src="docs/images/guide.png" alt="In-app guide" width="100%"> |
-| Live session, upcoming sessions, booking state | The full guide ships inside the app at `/guide` |
+| <img src="docs/images/home.png" alt="Home screen" width="100%"> | <img src="docs/images/hq.png" alt="Platform console" width="100%"> |
+| Live court card, you tonight, upcoming, notices | Approve or start communities. Counts only, no way inside |
+
+| In-app user guide |
+| :---: |
+| <img src="docs/images/guide.png" alt="In-app guide" width="60%"> |
+| The full guide ships inside the app at `/guide` |
 
 </details>
 
@@ -189,7 +233,8 @@ npm run dev                    # http://localhost:3000
 ```
 
 `npm run setup` seeds **30 players, 6 sessions and ~160 played games**, so every screen has
-something real in it. Start at `/who` and tap a name — players never sign up or sign in.
+something real in it. The demo players have no accounts yet: tap a name at `/who` to act as
+one, or sign in at `/signin` with any address to register a new player.
 
 For the organizer screens, go to `/signin` as `organizer@example.com`. Without a
 `RESEND_API_KEY` the development build prints the code and link straight onto the page, so
@@ -207,6 +252,9 @@ pretend it sent something.
 | ⚙️ Organizer | `/admin` | Sessions, members, venues, money |
 | 📖 User guide | `/guide` | The non-technical guide, in-app |
 | 🔐 Staff sign-in | `/signin` | Emails a code and a link |
+| 🏘️ Communities | `/communities` | Directory, join with a code, start your own |
+| 👤 Your profile | `/me` | Player number, communities, PIN, notifications |
+| 🛰️ Platform | `/hq` | Community requests and totals (demo organizer is platform admin) |
 | 🔑 **Staff PIN** | — | **`1234`** (demo seed only) |
 | ✉️ **Demo organizer** | — | **`organizer@example.com`** — with no mail provider set, dev prints the code on screen |
 
@@ -298,9 +346,9 @@ Everything in PRD §31 (MVP scope):
 
 | Area | Shipped |
 | :--- | :--- |
-| **Identity** | Players: cookie per phone, no signup, no password. Staff: magic-link accounts, several sign-in addresses per person |
-| **Access** | Session PIN for the court board, accounts only for anything spanning sessions |
-| **Self sign-up** | From the session link, with a duplicate-name guard and an organizer kill switch |
+| **Accounts** | Email code or link to register, player numbers, phone PIN, several sign-in addresses per person, name lock once registered |
+| **Communities** | Many per deployment, owner-run, public or private, join policies, invitations by number, email or link, per-community ratings |
+| **Access** | Roles from membership only. Session PIN for the court board, owner can switch it off |
 | **Sessions** | Shareable code, courts, capacity, fee, notes, game type, per-session weights |
 | **Booking** | Book, cancel, capacity limit, waitlist with automatic promotion and renumbering |
 | **Check-in** | Signed QR (24h expiry, session-scoped), plus manual and walk-in |
@@ -312,12 +360,9 @@ Everything in PRD §31 (MVP scope):
 | **Stats** | Player history, personal stats, doubles Elo leaderboard |
 | **Audit** | Silent coordinator override log |
 | **Schema** | Committed migrations, with baselining for databases built before them |
+| **Notifications** | Web Push: put on court, waitlist spot, notices, invitations, day-of reminder. iPhone needs the home-screen app |
 | **Delivery** | Installable PWA, no external CDN or font dependencies |
 
-> **Notifications:** phones get a push when they're put on court, when a waitlist spot opens,
-> when their community posts a notice or invites them, and on the morning of a session they booked.
-> Android works in the browser; iPhone needs the app added to the home screen first.
->
 > **Deliberately Phase 2:** WhatsApp, online payments, tournament mode, recurring sessions.
 
 ---
@@ -418,14 +463,17 @@ is the same failure the duplicate-name guard exists to stop.
 
 ```
 src/
-├── db/            schema.ts (18 tables, Drizzle) · migrate.ts · seed.ts
+├── db/            schema.ts (26 tables, Drizzle) · migrate.ts · seed.ts
 │                  bootstrap.ts · grant-admin.ts
 ├── lib/
 │   ├── queue-engine.ts   the matchmaking engine — pure, no I/O
 │   ├── fairness.ts       fairness score + doubles Elo with margin multiplier
 │   ├── sim.ts            in-memory session simulator
 │   ├── qr.ts             HMAC-signed check-in tokens
-│   ├── auth.ts           magic links, one-time codes, sessions
+│   ├── auth.ts           magic links, one-time codes, sessions, phone PINs
+│   ├── tenant.ts         which community you're in, from memberships only
+│   ├── push.ts           Web Push, sent after the response
+│   ├── rate.ts           guess limits for short codes
 │   ├── mail.ts           the one outbound email
 │   ├── identity.ts       cookie identity + staff PIN
 │   ├── safe-next.ts      redirect allow-list
@@ -437,7 +485,8 @@ src/
 │   └── auth-actions.ts   sign in, sign out — kept apart to stay auditable
 ├── components/    shared UI
 ├── drizzle/       committed migrations
-└── app/           19 routes
+├── fonts/         the wordmark face (Bricolage Grotesque, OFL)
+└── app/           29 routes
 ```
 
 | Layer | Choice | Why |
@@ -448,7 +497,7 @@ src/
 | Data | **Drizzle ORM** → **Neon Postgres** | HTTP driver — no connection pool to exhaust from serverless |
 | Hosting | **Vercel**, region `fra1` | Co-located with the Neon Frankfurt primary |
 | Auth | **Magic link + 4-digit code**, Resend | No passwords to store, leak or reset. The code exists because mail apps open links in their own browser |
-| Realtime | Polling, 5–6 s | Honest about what it is; push is Phase 2 |
+| Realtime | Polling, 5–6 s, plus **Web Push** (VAPID) | The board polls; the moments that matter reach the phone in the pocket |
 
 Every mutation is a server action posted from a plain `<form>`, so the app keeps working on a
 phone with one bar of signal in a sports hall.
@@ -478,7 +527,7 @@ The non-technical guide for players and coordinators: **[`docs/USER-GUIDE.md`](d
 
 ---
 
-## What v1.0.0 means, and what it doesn't
+## Known limits
 
 Feature-complete against PRD §31, tested, and running in production. What it has not done yet
 is thirty people on a Saturday night with patchy venue wifi — so expect the queue weights to
@@ -507,6 +556,16 @@ coordinator PIN**. Every phone unlocked with it loses the board on its next load
 coordinators sign in with their own accounts instead.
 
 Found something wrong, or want a weight changed? **hello@aiops.ae**
+
+---
+
+## Brand
+
+The **Shuttle Q** mark — a Q whose tail is a shuttlecock — with the SmashQ wordmark in
+Bricolage Grotesque. Mark variants, app icon, outlined lockups, colours and usage rules live in
+[`docs/brand`](docs/brand).
+
+<p align="center"><img src="docs/brand/smashq-lockup-dark.png" alt="SmashQ lockup" width="420"></p>
 
 ---
 
@@ -540,7 +599,7 @@ regression even if every test passes.
 
 <div align="center">
 
-<sub>**Smash Queue** is built and maintained by **[AIOps](https://aiops.ae)** — vendor-independent
+<sub>**SmashQ** is built and maintained by **[AIOps](https://aiops.ae)** — vendor-independent
 forward deployed engineering for the GCC.<br>
 Copyright &copy; 2026 Nishad Sukumaran (AIOps) · Licensed under [Apache 2.0](LICENSE)</sub>
 

@@ -2,7 +2,7 @@
 
 **Book. Check in. Queue. Play.**
 
-**Live at [smashq.aiopsgroup.ai](https://smashq.aiopsgroup.ai)** &middot; `v1.0.0`
+**Live at [smashq.aiopsgroup.ai](https://smashq.aiopsgroup.ai)** &middot; `v1.1.0`
 &middot; built by [AIOps](https://aiops.ae) &middot; something wrong? **hello@aiops.ae**
 
 One badminton group, one link. Players book from WhatsApp, scan a QR at the door, and
