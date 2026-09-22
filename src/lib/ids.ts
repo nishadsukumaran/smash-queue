@@ -16,11 +16,13 @@ export function sessionCode(length = 6) {
 }
 
 /**
- * A community's shareable invite code. Longer than a session code because it
- * is a standing credential rather than one that dies with the night: eight
- * characters from a 34-letter alphabet is ~40 bits, which is not guessable at
- * any rate a web server will answer.
+ * A community's shareable invite code: four characters from a 34-letter
+ * alphabet, about 1.3 million codes. Short enough to read out at a venue.
+ * What keeps it from being guessed is not its length but the door: a code
+ * only resolves for a signed-in account, and wrong codes are capped per
+ * account (see community-actions).
  */
+export const INVITE_CODE_LENGTH = 4;
 export function inviteCode() {
-  return sessionCode(8);
+  return sessionCode(INVITE_CODE_LENGTH);
 }

@@ -98,8 +98,8 @@ export async function verifyCodeAction(_prev: CodeState, fd: FormData): Promise<
   const code = str(fd, "code");
   const next = safeNext(str(fd, "next"));
 
-  if (!/^\d{6}$/.test(code.replace(/\s/g, ""))) {
-    return { status: "error", message: "The code is six digits." };
+  if (!/^(\d{4}|\d{6})$/.test(code.replace(/\s/g, ""))) {
+    return { status: "error", message: "The code is four digits." };
   }
 
   const userId = await redeemCode(email, code);

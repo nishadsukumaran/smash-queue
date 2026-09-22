@@ -215,7 +215,7 @@ Two gates, defending different things.
 | Court board, check-in, payments, QR | Session PIN **or** an account | A coordinator mid-session cannot be told to go and find their email. On one bar of signal in a sports hall, they will run the night on paper instead. |
 | Members, venues, fees, settings, stats | An account, only | A PIN read out at a venue is not a credential for other people's money and history, and the second a group exists here that it does not own, it is guarding someone else's roster too. |
 
-Sign-in emails carry a six-digit code and a clickable link on one token, so using either
+Sign-in emails carry a four-digit code and a clickable link on one token, so using either
 burns the other. Codes take five wrong guesses before the token is destroyed, and requests
 are capped per address per hour — spent tokens count, so failing does not refill the budget.
 Only hashes are stored, for links and sessions alike.

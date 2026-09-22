@@ -577,14 +577,15 @@ export const authTokens = pgTable(
     /** The long random token behind the clickable link. */
     tokenHash: text("token_hash").notNull(),
     /**
-     * The six digits printed in the same email. One row, two ways in, so
+     * The four digits printed in the same email. One row, two ways in, so
      * whichever gets used burns the other — there is never a spare credential
      * left alive in an inbox.
      */
     codeHash: text("code_hash"),
     /**
-     * Wrong guesses against the code. Six digits is a million combinations,
-     * which is only safe while the number of tries is small and finite.
+     * Wrong guesses against the code. Four digits is ten thousand
+     * combinations, safe only because tries are capped per token, per hour
+     * and per day (see lib/auth).
      */
     attempts: integer("attempts").notNull().default(0),
     expiresAt: ts("expires_at").notNull(),
@@ -648,6 +649,22 @@ export const trustedDevices = pgTable(
 );
 
 /* ------------------------------------------------------ push notifications */
+
+/**
+ * Things worth counting for a while and then forgetting: wrong invite codes
+ * typed by an account, for now. One row per event, keyed by what is being
+ * limited ("join:<userId>"), read back as "how many in the last hour".
+ * Old rows are deleted by the daily purge.
+ */
+export const rateEvents = pgTable(
+  "rate_events",
+  {
+    id: id(),
+    key: text("key").notNull(),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [index("rate_events_key_idx").on(t.key, t.createdAt)],
+);
 
 /**
  * One browser that agreed to receive notifications for one person.

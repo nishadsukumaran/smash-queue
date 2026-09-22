@@ -43,12 +43,19 @@ const LINK_TTL_MS = 15 * 60 * 1000;
 /** Wrong code guesses before the token is destroyed rather than left to grind. */
 const MAX_CODE_ATTEMPTS = 5;
 /**
- * Requests per address per hour. Without it, six digits could be ground down
- * by asking for a fresh code every time the attempt counter runs out. With it,
- * an attacker gets at most MAX_REQUESTS_PER_HOUR x MAX_CODE_ATTEMPTS guesses an
- * hour against a million combinations — and every attempt emails the victim.
+ * Requests per address per hour. Without it, four digits could be ground down
+ * by asking for a fresh code every time the attempt counter runs out.
  */
 const MAX_REQUESTS_PER_HOUR = 5;
+/**
+ * Wrong codes per address per day, across every code sent. Four digits is
+ * 10,000 combinations, so this is what actually holds: ten guesses a day is a
+ * one-in-a-thousand chance, every request emails the owner of the address,
+ * and the link in the same email (256 bits) keeps working for the real person.
+ */
+const MAX_CODE_FAILURES_PER_DAY = 10;
+/** Spent and expired tokens are kept this long so the limits above can count them. */
+const TOKEN_RETENTION_MS = 24 * 60 * 60 * 1000;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** No more than this many unconsumed links per email at once. */
 const MAX_LIVE_LINKS = 3;
@@ -59,10 +66,11 @@ const hash = (token: string) => createHash("sha256").update(token).digest("hex")
 const mint = () => randomBytes(32).toString("base64url");
 
 /**
- * Six digits, uniformly distributed. randomInt is rejection-sampled by Node,
- * so unlike `randomBytes % 1000000` the low values are not slightly likelier.
+ * Four digits, uniformly distributed. randomInt is rejection-sampled by Node,
+ * so unlike `randomBytes % 10000` the low values are not slightly likelier.
  */
-const mintCode = () => String(randomInt(0, 1_000_000)).padStart(6, "0");
+export const CODE_LENGTH = 4;
+const mintCode = () => String(randomInt(0, 10 ** CODE_LENGTH)).padStart(CODE_LENGTH, "0");
 
 /** Constant-time compare so a wrong token cannot be narrowed by timing. */
 function sameHash(a: string, b: string) {
@@ -429,21 +437,30 @@ export async function revokeDevice(userId: string, deviceId: string) {
 }
 
 /**
- * Redeems the six-digit code instead of the link.
+ * Redeems the four-digit code instead of the link.
  *
  * Scoped to the address that asked for it, so an attacker must already know
- * whose account they are attacking, and then still beat a million-to-one guess
- * within fifteen minutes and five tries. A wrong guess costs one of those
- * tries; the fifth destroys the token outright rather than leaving it to be
- * ground down. Requests per address are capped hourly too, so the obvious
- * workaround — burn five, ask for a fresh one — runs out as well.
+ * whose account they are attacking. A wrong guess costs one of five tries on
+ * the token, and the fifth destroys it. Requests are capped hourly and wrong
+ * guesses daily per address, so the workaround — burn five, ask again — runs
+ * out at ten guesses a day against ten thousand combinations.
  */
 export async function redeemCode(rawEmail: string, rawCode: string): Promise<string | null> {
   const email = normalizeEmail(rawEmail);
   const code = rawCode.replace(/\D/g, "");
-  if (code.length !== 6) return null;
+  // Six still accepted for codes emailed just before the switch to four.
+  if (code.length !== CODE_LENGTH && code.length !== 6) return null;
 
   const now = new Date();
+
+  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const today = await db
+    .select({ attempts: authTokens.attempts })
+    .from(authTokens)
+    .where(and(eq(authTokens.email, email), gte(authTokens.createdAt, dayAgo)));
+  const failures = today.reduce((n, t) => n + t.attempts, 0);
+  if (failures >= MAX_CODE_FAILURES_PER_DAY) return null;
+
   const candidates = await db
     .select()
     .from(authTokens)
@@ -659,6 +676,10 @@ export async function signOut() {
  */
 export async function pruneAuth() {
   const now = new Date();
-  await db.delete(authTokens).where(lt(authTokens.expiresAt, now));
+  // Kept for a day after expiry: the hourly request cap and the daily cap on
+  // wrong codes count them, and deleting them early would reset both.
+  await db
+    .delete(authTokens)
+    .where(lt(authTokens.expiresAt, new Date(now.getTime() - TOKEN_RETENTION_MS)));
   await db.delete(authSessions).where(lt(authSessions.expiresAt, now));
 }

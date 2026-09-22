@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { purgeExpiredCommunities } from "@/lib/purge";
+import { pruneRateEvents } from "@/lib/rate";
 
 /**
  * Daily: erases communities whose 30-day recovery window has passed.
@@ -14,5 +15,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
   const purged = await purgeExpiredCommunities();
+  await pruneRateEvents();
   return NextResponse.json({ ok: true, purged: purged.length });
 }

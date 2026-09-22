@@ -99,14 +99,14 @@ export function JoinCodeForm({ signedIn }: { signedIn: boolean }) {
   return (
     <section className="card p-4">
       <h2 className="label">Got a code?</h2>
-      <p className="mt-1 text-xs text-muted">Eight characters from whoever runs the community.</p>
+      <p className="mt-1 text-xs text-muted">Four letters and numbers from whoever runs the community.</p>
       {signedIn ? (
         <form action={action} className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
           <input
             className="input font-mono uppercase tracking-[.2em]"
             name="code"
-            placeholder="XXXXXXXX"
-            maxLength={12}
+            placeholder="XXXX"
+            maxLength={8}
             autoComplete="off"
             aria-label="Invite code"
             required

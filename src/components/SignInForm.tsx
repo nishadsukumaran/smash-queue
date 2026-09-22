@@ -117,9 +117,9 @@ function EmailDoor({ next, expired }: { next: string; expired: boolean }) {
             inputMode="numeric"
             autoComplete="one-time-code"
             pattern="[0-9]*"
-            maxLength={6}
-            placeholder="------"
-            aria-label="Six-digit sign-in code"
+            maxLength={4}
+            placeholder="----"
+            aria-label="Four-digit sign-in code"
             autoFocus
             required
           />

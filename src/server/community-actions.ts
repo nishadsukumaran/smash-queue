@@ -30,7 +30,8 @@ import {
   communityRequests, groupInvites, groupMembers, groups, roleRequests, users,
   type MemberRole, type Visibility,
 } from "@/db/schema";
-import { inviteCode as mintInviteCode, newId } from "@/lib/ids";
+import { INVITE_CODE_LENGTH, inviteCode as mintInviteCode, newId, sessionCode } from "@/lib/ids";
+import { JOIN_MISSES_PER_HOUR, joinKey, overLimit, recordMiss } from "@/lib/rate";
 import { uniqueSlug } from "@/lib/slug";
 import { joinPolicyOf } from "@/lib/join-policy";
 import {
@@ -63,9 +64,10 @@ async function member(): Promise<Account | null> {
 }
 
 async function freshInviteCode(): Promise<string> {
-  // 34 characters, eight of them: a collision is vanishingly unlikely, and
-  // "vanishingly" is still not "never" when a unique index would 500 on it.
-  for (let attempt = 0; attempt < 5; attempt++) {
+  // Four characters from 34 is 1.3 million codes: collisions are rare but
+  // real once there are thousands of communities, and a unique index would
+  // 500 on one. So look, and try again.
+  for (let attempt = 0; attempt < 20; attempt++) {
     const code = mintInviteCode();
     const [clash] = await db
       .select({ id: groups.id })
@@ -73,7 +75,8 @@ async function freshInviteCode(): Promise<string> {
       .where(eq(groups.inviteCode, code));
     if (!clash) return code;
   }
-  return `${mintInviteCode()}${Date.now().toString(36).toUpperCase().slice(-2)}`;
+  // Twenty clashes in a row means the four-character space is filling up.
+  return sessionCode(INVITE_CODE_LENGTH + 1);
 }
 
 async function liveGroup(groupId: string) {
@@ -864,12 +867,21 @@ type JoinOutcome = Result & { status?: "joined" | "waiting" | "already"; slug?: 
 
 /** The shareable-code door: follows the community's join policy. */
 export async function joinWithCode(code: string, note?: string): Promise<JoinOutcome> {
+  // Signed in before anything is looked up: an anonymous "no such code" would
+  // let a script walk all 1.3 million four-character codes for free.
+  const account = await member();
+  if (!account) return { ok: false, message: "Sign in first." };
+  if (await overLimit(joinKey(account.id), JOIN_MISSES_PER_HOUR))
+    return { ok: false, message: "Too many codes tried. Wait an hour, or ask for the invite link." };
+
   const clean = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (clean.length < 4) return { ok: false, message: "Check the code and try again." };
 
   const [group] = await db.select().from(groups).where(eq(groups.inviteCode, clean));
-  if (!group || group.archivedAt || group.deletedAt)
+  if (!group || group.archivedAt || group.deletedAt) {
+    await recordMiss(joinKey(account.id));
     return { ok: false, message: "No community has that code. Check it with whoever sent it." };
+  }
 
   return joinCommunity(group.id, note);
 }

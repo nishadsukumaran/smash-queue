@@ -53,7 +53,7 @@ score, who still owes money.
 
 ### Your account
 
-Sign in with just your email — **Sign in** at the top. We send a six-digit code; type it
+Sign in with just your email — **Sign in** at the top. We send a four-digit code; type it
 and you're in. New here? The same code creates your account. No password, ever.
 
 The first time, you'll pick the name other players know you by, and you can set a
@@ -80,7 +80,7 @@ members and money. You only see the sessions of communities you've joined.
 | :--- | :--- |
 | An invitation in your app | It's on your profile — tap **Join** |
 | An invitation link (`/i/…`) | Open it and tap **Accept** |
-| The community's share link or 8-character code | Open the link, or type the code under **Communities → Got a code?** |
+| The community's share link or 4-character code | Open the link, or type the code under **Communities → Got a code?** |
 | Nothing, but it's a public community | Find it under **Communities**, then **Join** or **Ask to join** |
 
 If the community approves new members by hand you'll see **Request sent**; once you're let
@@ -183,7 +183,7 @@ covers the court board, check-in, payments and the QR code — everything you ne
 game waiting. It is one short number because the alternative, mid-session on bad venue
 wifi, is you running the night on paper.
 
-**Or an account.** Tap *Sign in with email* instead and you get a six-digit code and a
+**Or an account.** Tap *Sign in with email* instead and you get a four-digit code and a
 link. Either signs you in; both expire in fifteen minutes and work once. Worth doing if
 you help out regularly, because it survives a PIN change.
 
@@ -527,7 +527,7 @@ from it is spent, because both are the same key.
 
 **You tapped the link and it signed you in, but the tab you were using is still asking.**
 Mail apps often open links in their own built-in browser, which is not the browser you
-started in. Use the six-digit code instead — you type it where you already are.
+started in. Use the four-digit code instead — you type it where you already are.
 
 **You're locked out of the organizer screens entirely.** The PIN will not get you in there
 by design. Somebody who still has organizer access can add or correct your email under

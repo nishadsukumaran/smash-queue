@@ -377,24 +377,30 @@ history over** — and the welcome screen says so, with a "that isn't me" that s
 apart. Once someone registers, their name is locked: nobody can book, cancel or score as them
 by tapping it any more.
 
-Every sign-in email carries **two ways in**: a six-digit code and a clickable link, on the
+Every sign-in email carries **two ways in**: a four-digit code and a clickable link, on the
 same token, so using either burns the other. The code is there because a magic link quietly
 assumes the browser opening the email is the browser signing in. On a phone it usually
 is not — the mail client hands the link to its own in-app browser, the session lands there,
 and the tab the person started in is still signed out. A code goes wherever they already
 are, and unlike a link it cannot be spent by a mail scanner prefetching it.
 
-Six digits is a million combinations, which is only safe while the number of tries is small
-and finite:
+Four digits is ten thousand combinations, which is only safe while the number of tries is
+small and finite:
 
 | Control | Why it's there |
 | :--- | :--- |
 | Five wrong guesses destroys the token | Not locks — destroys, so it cannot be ground down |
 | Five requests per address per hour | Otherwise you burn five guesses and ask for a fresh code, forever |
 | Spent tokens count toward that cap | Failing does not refill the budget |
+| Ten wrong codes per address per day | The cap that actually holds: one-in-a-thousand a day, and every request emails the address's owner. The link in the same email keeps working for them |
 | Code scoped to the address that asked | An attacker must know whose account they are attacking first |
 | Only SHA-256 hashes stored | A dump of the auth tables is inert, links and sessions alike |
 | Redirects restricted to same-site paths | Otherwise a link starting on our own domain could bounce a freshly signed-in organizer somewhere else |
+
+Community invite codes are **four characters** (letters and numbers, no I or O), about 1.3
+million codes. That's short enough to read out at a venue and far too short to leave open to
+a script, so a code only resolves for a signed-in account, and ten wrong codes an hour stops
+that account trying.
 
 The sign-in form answers **identically** whether or not an address belongs to anyone,
 including when mail is unconfigured — that check runs before the lookup, so it cannot single
@@ -441,7 +447,7 @@ src/
 | Styling | **Tailwind v4** CSS-first `@theme` | No config file, no runtime, no CDN |
 | Data | **Drizzle ORM** → **Neon Postgres** | HTTP driver — no connection pool to exhaust from serverless |
 | Hosting | **Vercel**, region `fra1` | Co-located with the Neon Frankfurt primary |
-| Auth | **Magic link + 6-digit code**, Resend | No passwords to store, leak or reset. The code exists because mail apps open links in their own browser |
+| Auth | **Magic link + 4-digit code**, Resend | No passwords to store, leak or reset. The code exists because mail apps open links in their own browser |
 | Realtime | Polling, 5–6 s | Honest about what it is; push is Phase 2 |
 
 Every mutation is a server action posted from a plain `<form>`, so the app keeps working on a
