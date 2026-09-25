@@ -9,12 +9,15 @@ import { Avatar } from "@/components/Avatar";
 import { Announcements } from "@/components/Announcements";
 import { CommunitySwitcher } from "@/components/CommunitySwitcher";
 import {
-  getBoard, getPlayerView, getRoster, getVenue, listAnnouncements, listSessions,
+  getBoard, getPlayerView, getRoster, getVenue, landingStats, listAnnouncements, listSessions,
+  publicCommunityTeasers,
   type BoardData, type PlayerView, type RosterEntry,
 } from "@/server/queries";
+import { Landing } from "@/components/landing/Landing";
 import { currentUserId, isStaffFor } from "@/lib/identity";
 import { canStaff, currentAccount, isPlatformAdmin } from "@/lib/auth";
 import { SUPPORT_EMAIL, supportMailto } from "@/lib/brand";
+import { PALETTE } from "@/lib/palette";
 import { activeCommunity, myCommunities } from "@/lib/tenant";
 import { markAnnouncementsRead } from "@/server/actions";
 import { clockTime, minutesSince, money, prettyDate, prettyDateTime, prettyTime, TIME_ZONE } from "@/lib/format";
@@ -26,6 +29,16 @@ const step = (i: number) => ({ "--i": i }) as CSSProperties;
 
 export default async function Home() {
   const account = await currentAccount();
+
+  // A stranger gets the front door, not a redirect into a sign-in form. The
+  // old behaviour sent anyone who had not signed in straight to /communities,
+  // which renders a bare "sign in or create an account" card — a login wall
+  // as the first thing the product says about itself.
+  if (!account?.onboarded) {
+    const [stats, teasers] = await Promise.all([landingStats(), publicCommunityTeasers()]);
+    return <Landing stats={stats} teasers={teasers} />;
+  }
+
   const active = await activeCommunity(account);
   if (!active) redirect("/communities");
   const group = active.group;
@@ -91,8 +104,8 @@ export default async function Home() {
           <LiveCard session={live} board={board} venue={liveVenue?.name ?? null} />
           <div className="flex flex-col gap-3">
             {userId ? <YouTonight pv={pv} code={live.code} /> : <GuestCard />}
-            <Link href={`/s/${live.code}`} className="card flex items-center gap-3 border-teal/40 bg-teal/10 p-4">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal text-[#04241A]">
+            <Link href={`/s/${live.code}`} className="card led flex items-center gap-3 border-teal/40 bg-teal/10 p-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal text-on-accent">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M3 9V4h5M16 4h5v5M21 15v5h-5M8 20H3v-5" /><rect x="8" y="8" width="8" height="8" rx="1" /></svg>
               </span>
               <span className="min-w-0">
@@ -138,7 +151,7 @@ export default async function Home() {
                     <div className="font-bold">{s.name}</div>
                     <div className="mt-0.5 text-xs text-muted">{prettyTime(s.startTime)} · {money(s.fee, s.currency)}</div>
                     <div className="mt-2 h-1 max-w-80 overflow-hidden rounded-full bg-court">
-                      <div className={`bar-fill h-full rounded-full ${full ? "bg-amber" : "bg-teal"}`} style={{ width: `${Math.min(100, (confirmed / Math.max(1, s.capacity)) * 100)}%`, ...step(i) }} />
+                      <div className={`bar-fill h-full rounded-full ${full ? "bar-heat" : "bar-electric"}`} style={{ width: `${Math.min(100, (confirmed / Math.max(1, s.capacity)) * 100)}%`, ...step(i) }} />
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
@@ -214,7 +227,7 @@ function LiveCard({ session: s, board, venue }: { session: BoardData["session"];
   const name = (id: string) => byId.get(id) ?? "—";
   const played = board.matches.filter((m) => m.status === "completed").length;
   return (
-    <Link href={`/s/${s.code}`} className="court court-live rise flex flex-col gap-5 p-5">
+    <Link href={`/s/${s.code}`} className="court court-live rise edge-electric flex flex-col gap-5 p-5">
       <div className="relative flex flex-wrap items-center gap-2.5">
         <span className="live-dot" />
         <span className="text-[11px] font-extrabold uppercase tracking-wider text-shuttle">Live now</span>
@@ -340,11 +353,11 @@ function GuestCard() {
 
 function FairnessRing({ score }: { score: number }) {
   const C = 2 * Math.PI * 19;
-  const color = score >= 88 ? "#3DD9A4" : score >= 72 ? "#FFC24B" : "#FF6B6B";
+  const color = score >= 88 ? PALETTE.cyan : score >= 72 ? PALETTE.amber : PALETTE.rose;
   return (
     <span className="relative inline-block h-[46px] w-[46px] shrink-0">
       <svg width="46" height="46" viewBox="0 0 46 46" className="block">
-        <circle cx="23" cy="23" r="19" fill="none" stroke="#0A1A15" strokeWidth="5" />
+        <circle cx="23" cy="23" r="19" fill="none" stroke={PALETTE.court} strokeWidth="5" />
         <circle cx="23" cy="23" r="19" fill="none" stroke={color} strokeWidth="5" strokeLinecap="round" strokeDasharray={`${(score / 100) * C} ${C}`} transform="rotate(-90 23 23)" />
       </svg>
       <span className="tabular absolute inset-0 flex items-center justify-center text-[11px] font-extrabold">{score}%</span>

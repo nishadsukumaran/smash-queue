@@ -1049,3 +1049,98 @@ async function ownedCommunities(userId: string) {
 export async function canStartFreely(userId: string, platformAdmin = false) {
   return platformAdmin || (await ownedCommunities(userId)) === 0;
 }
+
+/* ------------------------------------------------------------- the landing */
+
+/**
+ * Headline numbers for the signed-out landing page.
+ *
+ * Counts only. Nothing here identifies a person, a community or a venue, which
+ * is what makes it safe to render on a page with no session behind it — the
+ * page is public, so everything it touches has to be.
+ */
+export async function landingStats() {
+  const liveGroups = and(isNull(groups.archivedAt), isNull(groups.deletedAt));
+  const [communities, players, sessionsRun, gamesPlayed] = await Promise.all([
+    db.select({ n: sql<number>`count(*)::int` }).from(groups).where(liveGroups),
+    db.select({ n: sql<number>`count(*)::int` }).from(users),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(sessions)
+      .where(inArray(sessions.status, ["live", "closed"])),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(matches)
+      .where(eq(matches.status, "completed")),
+  ]);
+  return {
+    communities: communities[0]?.n ?? 0,
+    players: players[0]?.n ?? 0,
+    sessions: sessionsRun[0]?.n ?? 0,
+    games: gamesPlayed[0]?.n ?? 0,
+  };
+}
+
+export type CommunityTeaser = {
+  /** Where they play, at city granularity. Never the venue. */
+  location: string;
+  /** Bucketed, not exact: a precise count is a fingerprint for a small group. */
+  size: string;
+  /** Sessions a week, rounded, from the last four weeks. */
+  perWeek: number;
+};
+
+/**
+ * Public communities for the landing page, with the identifying parts removed.
+ *
+ * The directory itself stays behind sign-in — an owner who makes a community
+ * public is choosing to be findable by other players, not by the open web, and
+ * that decision is honoured here. What a stranger gets is shape rather than
+ * identity: a city, a size band, a rhythm. Enough to answer "is there anything
+ * near me, and is it alive", which is the only question this section exists to
+ * answer. The name, the venue and the people are behind the door.
+ */
+export async function publicCommunityTeasers(limit = 6): Promise<CommunityTeaser[]> {
+  const rows = await db
+    .select({
+      id: groups.id,
+      location: groups.location,
+    })
+    .from(groups)
+    .where(
+      and(eq(groups.visibility, "public"), isNull(groups.archivedAt), isNull(groups.deletedAt)),
+    );
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.id);
+  const since = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const [memberCounts, recentSessions] = await Promise.all([
+    db
+      .select({ groupId: groupMembers.groupId, n: sql<number>`count(*)::int` })
+      .from(groupMembers)
+      .where(and(inArray(groupMembers.groupId, ids), eq(groupMembers.status, "active")))
+      .groupBy(groupMembers.groupId),
+    db
+      .select({ groupId: sessions.groupId, n: sql<number>`count(*)::int` })
+      .from(sessions)
+      .where(and(inArray(sessions.groupId, ids), gt(sessions.date, since)))
+      .groupBy(sessions.groupId),
+  ]);
+  const members = new Map(memberCounts.map((m) => [m.groupId, m.n]));
+  const recent = new Map(recentSessions.map((m) => [m.groupId, m.n]));
+
+  const band = (n: number) =>
+    n < 10 ? "Under 10 players" : n < 25 ? "10 to 25 players" : n < 50 ? "25 to 50 players" : "50+ players";
+
+  return rows
+    .map((r) => ({
+      location: r.location?.trim() || "Location not set",
+      size: band(members.get(r.id) ?? 0),
+      perWeek: Math.max(1, Math.round((recent.get(r.id) ?? 0) / 4)),
+      _n: members.get(r.id) ?? 0,
+    }))
+    .sort((a, b) => b._n - a._n)
+    .slice(0, limit)
+    .map(({ _n, ...rest }) => rest);
+}
