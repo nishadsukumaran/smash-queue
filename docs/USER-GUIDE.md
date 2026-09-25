@@ -21,6 +21,7 @@ screen and stops being the person everybody asks "when am I playing?"
 4. [For the organizer](#4-for-the-organizer)
    - [Owning a community](#4a-owning-a-community)
    - [For the platform admin](#4b-for-the-platform-admin)
+   - [Tournaments](#4c-tournaments)
 5. [How the queue decides](#5-how-the-queue-decides)
 6. [Statuses, decoded](#6-statuses-decoded)
 7. [When things go sideways](#7-when-things-go-sideways)
@@ -418,6 +419,49 @@ your profile (or go to `/hq`):
   anything inside it. **Restore** undoes it.
 
 There is deliberately no way from here into any community.
+
+## 4c. Tournaments
+
+A community can host tournaments: announce one, take entries and fees, make the draws and
+record results, all in the app. Open **Tournaments** from the home page to see what's on.
+
+### Entering one
+
+Open the tournament, pick a category and tap **Enter**. For doubles, type your partner's
+**player number** (it's on their profile). They get a request on their profile page and in
+**Tournaments**, and the entry only counts once they accept. Nobody can put your name down
+without you saying yes.
+
+Some tournaments are **for members only**; others are **open to every SmashQ player** and
+listed publicly. Entering an open one doesn't make you a member of the host community, but
+its organizers do see your name and player number, because you entered.
+
+The fee and how to pay it are on the tournament page. The organizer marks you paid. You can
+withdraw from **Your entries** until the draw is made.
+
+### Running one (organizers)
+
+**Organizer → Tournaments → New tournament.** It starts as a draft only organizers see.
+
+1. **Setup.** Dates, venue, who can enter (members only or anyone), when entries close, and
+   whether you confirm each entry or they're in straight away. Add how to pay and the rules.
+2. **Categories.** One per event: Men's Doubles A, Women's Doubles B, Mixed Open, Open
+   Singles... Each has its own fee (per player or per pair), entry limit, format and scoring.
+   Formats: **groups then knockout** (the usual), **straight knockout**, or **round robin**.
+3. **Prizes.** Cash, trophies, medals, vouchers or gifts, for winner, runner-up and third in
+   each category, plus special awards like best newcomer.
+4. **Publish.** Your members get a notification. From here the tournament has its own link,
+   `/t/CODE`, to share anywhere.
+5. **Entries & fees.** Confirm, waitlist or reject entries, and mark fees paid, waived or
+   unpaid. When a confirmed entry drops out, the first on the waiting list moves up.
+6. **Draws.** Close entries, set seeds if you want (1 and 2 can only meet in the final; blank
+   seeds go by rating in your community), then **Make the draw**. Groups are spread so the top
+   seeds aren't together. After the groups, **Draw the knockout** takes the top teams from each
+   group and keeps group-mates apart in the first round.
+7. **Results.** On the tournament page, every match has **Enter result**, for organizers and
+   anyone running the court. Enter the game scores, or give a walkover. Winners move through
+   the bracket on their own, and the page shows the winner, runner-up and thirds at the end.
+8. **Finish** marks the results final.
 
 ---
 

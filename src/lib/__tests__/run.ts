@@ -6,6 +6,10 @@ import {
 } from "../queue-engine";
 import { fairnessScore, updateRatings, ratingBand } from "../fairness";
 import { signCheckInToken, verifyCheckInToken } from "../qr";
+import {
+  bracketSize, seedOrder, knockoutDraw, roundRobinDraw, splitIntoGroups, judgeScores,
+  standings, knockoutFromGroups, knockoutPlacings, roundName,
+} from "../tournament-engine";
 
 let passed = 0;
 const failures: string[] = [];
@@ -203,6 +207,83 @@ check("rating bands line up with the PRD", ratingBand(900).label === "Beginner" 
   check("a token from another session is rejected", !verifyCheckInToken(token, "ses_2"));
   check("a tampered token is rejected", !verifyCheckInToken(token.slice(0, -1) + "x", "ses_1"));
   check("last week's token is rejected", !verifyCheckInToken(signCheckInToken("ses_1", Date.now() - 48 * 3600_000), "ses_1"));
+}
+
+
+/* ----------------------------------------------------------- tournaments */
+
+{
+  check("bracket size rounds up to a power of two", bracketSize(5) === 8 && bracketSize(8) === 8 && bracketSize(1) === 2 && bracketSize(9) === 16);
+  check("seed order keeps 1 and 2 apart", JSON.stringify(seedOrder(8)) === "[1,8,4,5,2,7,3,6]", seedOrder(8));
+
+  const six = ["s1", "s2", "s3", "s4", "s5", "s6"];
+  const ko = knockoutDraw(six);
+  const r1 = ko.filter((m) => m.round === 1);
+  check("six entries make an eight-draw with seven matches", ko.length === 7 && r1.length === 4);
+  const byes = r1.filter((m) => m.status === "bye");
+  check("the two byes go to seeds 1 and 2", byes.length === 2 && byes.map((m) => m.winner).sort().join() === "s1,s2", byes);
+  const semis = ko.filter((m) => m.round === 2);
+  check("bye winners are already in round two", semis.some((m) => m.entryA === "s1") && semis.some((m) => m.entryA === "s2"), semis);
+  check("seeds 1 and 2 are in opposite halves", semis.findIndex((m) => m.entryA === "s1") !== semis.findIndex((m) => m.entryA === "s2"));
+  check("every non-final match points somewhere", ko.filter((m) => m.round < 3).every((m) => m.nextKey && m.nextSide));
+  check("the final points nowhere", ko.filter((m) => m.round === 3).every((m) => m.nextKey === null));
+  check("two entries is just a final", knockoutDraw(["a", "b"]).length === 1 && knockoutDraw(["a", "b"])[0].status === "ready");
+  check("round names read naturally", roundName(3, 3) === "Final" && roundName(2, 3) === "Semi-finals" && roundName(1, 4) === "Round of 16");
+
+  const rr = roundRobinDraw(["a", "b", "c", "d", "e"], "A");
+  check("five in a group play ten matches", rr.length === 10, rr.length);
+  const pairs = new Set(rr.map((m) => [m.entryA, m.entryB].sort().join()));
+  check("every pair meets exactly once", pairs.size === 10);
+  const perRound = new Map<number, string[]>();
+  for (const m of rr) perRound.set(m.round, [...(perRound.get(m.round) ?? []), m.entryA!, m.entryB!]);
+  check("nobody plays twice in a round", [...perRound.values()].every((ids) => new Set(ids).size === ids.length));
+
+  const groups = splitIntoGroups(["1", "2", "3", "4", "5", "6", "7", "8"], 4);
+  check("eight split into two groups of four", groups.length === 2 && groups.every((g) => g.length === 4));
+  check("snake seeding spreads the top seeds", groups[0].includes("1") && groups[1].includes("2") && groups[1].includes("3") && groups[0].includes("4"), groups);
+
+  check("a single game is judged", "winner" in judgeScores([[21, 15]], 1) && (judgeScores([[21, 15]], 1) as { winner: string }).winner === "A");
+  check("best of three needs two games", "error" in judgeScores([[21, 15]], 3));
+  check("best of three is judged", (judgeScores([[21, 15], [18, 21], [19, 21]], 3) as { winner: string }).winner === "B");
+  check("a level game is refused", "error" in judgeScores([[20, 20]], 1));
+  check("a game after the match was won is refused", "error" in judgeScores([[21, 1], [21, 2], [2, 21]], 3));
+
+  const table = standings(["a", "b", "c"], [
+    { entryA: "a", entryB: "b", winner: "b", scores: [[18, 21]], done: true },
+    { entryA: "a", entryB: "c", winner: "a", scores: [[21, 5]], done: true },
+    { entryA: "b", entryB: "c", winner: "c", scores: [[19, 21]], done: true },
+  ]);
+  check("a three-way tie falls to point difference", table.map((r) => r.entryId).join() === "a,b,c", table);
+  const two = standings(["a", "b", "c"], [
+    { entryA: "a", entryB: "b", winner: "b", scores: [[20, 22]], done: true },
+    { entryA: "a", entryB: "c", winner: "a", scores: [[21, 1]], done: true },
+    { entryA: "b", entryB: "c", winner: "b", scores: [[21, 19]], done: true },
+  ]);
+  check("the group winner tops the table", two[0].entryId === "b" && two[0].won === 2);
+
+  const fromGroups = knockoutFromGroups(
+    [{ label: "A", order: ["A1", "A2"] }, { label: "B", order: ["B1", "B2"] }],
+    2,
+  );
+  const firstRound = fromGroups.filter((m) => m.round === 1);
+  check("group winners meet the other group's runner-up", firstRound.every((m) => m.entryA![0] !== m.entryB![0]), firstRound.map((m) => [m.entryA, m.entryB]));
+  const four = knockoutFromGroups(
+    ["A", "B", "C", "D"].map((l) => ({ label: l, order: [`${l}1`, `${l}2`] })),
+    2,
+  ).filter((m) => m.round === 1);
+  check("no same-group first round with four groups", four.every((m) => m.entryA![0] !== m.entryB![0]), four.map((m) => [m.entryA, m.entryB]));
+  const three = knockoutFromGroups(
+    ["A", "B", "C"].map((l) => ({ label: l, order: [`${l}1`, `${l}2`] })),
+    2,
+  ).filter((m) => m.round === 1 && m.status === "ready");
+  check("no same-group first round with three groups", three.every((m) => m.entryA![0] !== m.entryB![0]), three.map((m) => [m.entryA, m.entryB]));
+
+  const places = knockoutPlacings([
+    { round: 1, entryA: "a", entryB: "d", winner: "a", done: true },
+    { round: 1, entryA: "b", entryB: "c", winner: "c", done: true },
+    { round: 2, entryA: "a", entryB: "c", winner: "c", done: true },
+  ]);
+  check("placings: champion, runner-up and two thirds", places.map((p) => `${p.place}${p.entryId}`).join() === "1c,2a,3d,3b", places);
 }
 
 console.log("\n  " + "-".repeat(58));

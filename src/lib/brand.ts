@@ -1,7 +1,7 @@
 /** Single source of truth for product identity, release channel and support. */
 
 export const APP_NAME = "Smash Queue";
-export const APP_VERSION = "1.1.0";
+export const APP_VERSION = "1.2.0";
 /** null on a stable release; a label like "Beta" or "RC" on a prerelease. */
 export const RELEASE_CHANNEL: string | null = null;
 

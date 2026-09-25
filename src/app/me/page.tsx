@@ -17,6 +17,9 @@ import { currentUserId } from "@/lib/identity";
 import { ratingBand } from "@/lib/fairness";
 import { prettyDate, prettyDateTime } from "@/lib/format";
 import type { MemberRole } from "@/db/schema";
+import { MyTournaments } from "@/components/tournament/MyTournaments";
+import { Flash } from "@/components/tournament/bits";
+import { myTournamentEntries } from "@/server/tournament-queries";
 
 export const dynamic = "force-dynamic";
 
@@ -35,12 +38,17 @@ const ROLE: Record<MemberRole, string> = {
  * side, and it is only ever shown to the person they belong to. No community
  * sees any of it beyond its own games.
  */
-export default async function MePage() {
+export default async function MePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ m?: string; e?: string }>;
+}) {
+  const sp = await searchParams;
   const account = await currentAccount();
 
   if (!account) return <NotSignedIn />;
 
-  const [overall, communities, invites, requests, deleted, roleAsks, devices, pin] =
+  const [overall, communities, invites, requests, deleted, roleAsks, devices, pin, tEntries] =
     await Promise.all([
       getPlayerStats(account.id),
       myCommunityRecords(account.id),
@@ -50,6 +58,7 @@ export default async function MePage() {
       myRoleRequests(account.id),
       listMyDevices(account.id),
       pinCandidate(),
+      myTournamentEntries(account.id),
     ]);
   const freeCommunity = await canStartFreely(account.id, account.platformAdmin);
   const hasPinHere = Boolean(pin && pin.playerNo === account.playerNo);
@@ -57,6 +66,7 @@ export default async function MePage() {
 
   return (
     <div className="space-y-4">
+      <Flash m={sp.m} e={sp.e} />
       <section className="card p-5">
         <div className="flex items-center gap-3">
           <Avatar name={account.name} size={54} />
@@ -115,6 +125,8 @@ export default async function MePage() {
           </ul>
         </section>
       )}
+
+      <MyTournaments entries={tEntries} next="/me" />
 
       {overall && (
         <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">

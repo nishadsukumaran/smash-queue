@@ -4,7 +4,7 @@
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-1.1.0-C8F031?style=for-the-badge&labelColor=0A1A15)](https://github.com/nishadsukumaran/smash-queue/releases)
+[![Version](https://img.shields.io/badge/version-1.2.0-C8F031?style=for-the-badge&labelColor=0A1A15)](https://github.com/nishadsukumaran/smash-queue/releases)
 [![Live](https://img.shields.io/badge/live-smashq.aiopsgroup.ai-3DD9A4?style=for-the-badge&labelColor=0A1A15)](https://smashq.aiopsgroup.ai)
 [![Tests](https://img.shields.io/badge/tests-38%20passing-3DD9A4?style=for-the-badge&labelColor=0A1A15)](#prove-it-yourself)
 [![Fairness](https://img.shields.io/badge/games%20spread-%E2%89%A4%201-D7F75B?style=for-the-badge&labelColor=0A1A15)](#the-queue-engine)
@@ -360,6 +360,7 @@ Everything in PRD §31 (MVP scope):
 | **Stats** | Player history, personal stats, doubles Elo leaderboard |
 | **Audit** | Silent coordinator override log |
 | **Schema** | Committed migrations, with baselining for databases built before them |
+| **Tournaments** | Members-only or public, categories (men/women/mixed, singles/doubles, levels), fees per player or pair, prizes in cash or kind, partner confirmation, entry approval and waitlist, seeding, groups + knockout / knockout / round robin, live results and standings |
 | **Notifications** | Web Push: put on court, waitlist spot, notices, invitations, day-of reminder. iPhone needs the home-screen app |
 | **Delivery** | Installable PWA, no external CDN or font dependencies |
 
