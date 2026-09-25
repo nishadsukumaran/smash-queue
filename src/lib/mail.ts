@@ -78,21 +78,21 @@ function html(link: string, code: string, name: string) {
   // leads because most people open this on the phone they are signing in on,
   // where switching back to the browser beats following a link into whatever
   // in-app browser the mail client decides to use.
-  return `<!doctype html><html><body style="margin:0;padding:24px;background:#f4f6f5;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0F241D">
+  return `<!doctype html><html><body style="margin:0;padding:24px;background:#F2F4F8;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#101A2E">
   <div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px">
-    <p style="margin:0 0 8px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#5c7a6f">${APP_NAME}</p>
+    <p style="margin:0 0 8px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#6B7F9E">${APP_NAME}</p>
     <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3">Hi ${escapeHtml(name)}, here's your sign-in code</h1>
 
-    <div style="background:#0F241D;border-radius:12px;padding:20px;text-align:center">
-      <p style="margin:0 0 6px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#7FA396">Enter this code</p>
-      <p style="margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:38px;font-weight:700;letter-spacing:.22em;color:#D7F75B">${escapeHtml(code)}</p>
+    <div style="background:#101A2E;border-radius:12px;padding:20px;text-align:center">
+      <p style="margin:0 0 6px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#8496B8">Enter this code</p>
+      <p style="margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:38px;font-weight:700;letter-spacing:.22em;color:#C8F031">${escapeHtml(code)}</p>
     </div>
 
-    <p style="margin:24px 0 12px;font-size:15px;line-height:1.6;color:#3c554c">Or just tap the button — either one works.</p>
-    <a href="${link}" style="display:inline-block;background:#0F241D;color:#D7F75B;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:999px">Sign in</a>
+    <p style="margin:24px 0 12px;font-size:15px;line-height:1.6;color:#3A4A66">Or just tap the button — either one works.</p>
+    <a href="${link}" style="display:inline-block;background:#101A2E;color:#C8F031;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:999px">Sign in</a>
 
-    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#6b8378">Both expire in 15 minutes and work once. Link not clickable? Paste this:<br><span style="word-break:break-all;color:#3c554c">${link}</span></p>
-    <p style="margin:24px 0 0;padding-top:20px;border-top:1px solid #e3e9e6;font-size:13px;line-height:1.6;color:#6b8378">Didn't ask for this? Ignore it — the code is useless without your email address. Questions: <a href="mailto:${SUPPORT_EMAIL}" style="color:#1f7a5c">${SUPPORT_EMAIL}</a></p>
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#6B7F9E">Both expire in 15 minutes and work once. Link not clickable? Paste this:<br><span style="word-break:break-all;color:#3A4A66">${link}</span></p>
+    <p style="margin:24px 0 0;padding-top:20px;border-top:1px solid #E2E7F0;font-size:13px;line-height:1.6;color:#6B7F9E">Didn't ask for this? Ignore it — the code is useless without your email address. Questions: <a href="mailto:${SUPPORT_EMAIL}" style="color:#0E6E8C">${SUPPORT_EMAIL}</a></p>
   </div>
 </body></html>`;
 }
@@ -166,14 +166,14 @@ export async function sendInvite(
 }
 
 function inviteHtml(link: string, community: string, invitedBy: string, greeting: string) {
-  return `<!doctype html><html><body style="margin:0;padding:24px;background:#f4f6f5;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0F241D">
+  return `<!doctype html><html><body style="margin:0;padding:24px;background:#F2F4F8;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#101A2E">
   <div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px">
-    <p style="margin:0 0 8px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#5c7a6f">${APP_NAME}</p>
+    <p style="margin:0 0 8px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#6B7F9E">${APP_NAME}</p>
     <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3">Hi ${escapeHtml(greeting)}, you're invited to ${escapeHtml(community)}</h1>
-    <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#3c554c">${escapeHtml(invitedBy)} added you to the community. It is where the group posts sessions, takes bookings, runs the court queue and settles the court fee.</p>
-    <a href="${link}" style="display:inline-block;background:#0F241D;color:#D7F75B;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:999px">Accept the invitation</a>
-    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#6b8378">No password to set — the link signs you straight in and expires in 14 days. Not clickable? Paste this:<br><span style="word-break:break-all;color:#3c554c">${link}</span></p>
-    <p style="margin:24px 0 0;padding-top:20px;border-top:1px solid #e3e9e6;font-size:13px;line-height:1.6;color:#6b8378">Not expecting this? Ignore it and nothing happens. Questions: <a href="mailto:${SUPPORT_EMAIL}" style="color:#1f7a5c">${SUPPORT_EMAIL}</a></p>
+    <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#3A4A66">${escapeHtml(invitedBy)} added you to the community. It is where the group posts sessions, takes bookings, runs the court queue and settles the court fee.</p>
+    <a href="${link}" style="display:inline-block;background:#101A2E;color:#C8F031;text-decoration:none;font-weight:600;font-size:15px;padding:14px 28px;border-radius:999px">Accept the invitation</a>
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#6B7F9E">No password to set — the link signs you straight in and expires in 14 days. Not clickable? Paste this:<br><span style="word-break:break-all;color:#3A4A66">${link}</span></p>
+    <p style="margin:24px 0 0;padding-top:20px;border-top:1px solid #E2E7F0;font-size:13px;line-height:1.6;color:#6B7F9E">Not expecting this? Ignore it and nothing happens. Questions: <a href="mailto:${SUPPORT_EMAIL}" style="color:#0E6E8C">${SUPPORT_EMAIL}</a></p>
   </div>
 </body></html>`;
 }

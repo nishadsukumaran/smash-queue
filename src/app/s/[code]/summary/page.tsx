@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { CountUp } from "@/components/motion/CountUp";
 import { SummaryCheer } from "@/components/motion/SummaryCheer";
-import { Shuttle } from "@/components/Shuttle";
+import { BrandShuttle } from "@/components/Logo";
 import { getSessionByCode, getSessionSummary } from "@/server/queries";
 import { money, prettyDate } from "@/lib/format";
 import type { CSSProperties } from "react";
@@ -42,7 +42,7 @@ export default async function SummaryPage({ params }: { params: Promise<{ code: 
     <div className="space-y-4">
       <SummaryCheer sessionCode={code} fire={wellRun} />
 
-      <section className="card celebrate rise overflow-hidden p-6 text-center">
+      <section className="card celebrate led edge-electric rise overflow-hidden p-6 text-center">
         <div className="relative">
           <p className="label">Session fairness</p>
           <p className={`mt-1 text-6xl font-extrabold leading-none ${tone}`}>
@@ -55,7 +55,7 @@ export default async function SummaryPage({ params }: { params: Promise<{ code: 
           {s.fairness.spread <= 1 && (
             <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-teal">
               <span className="shuttle-drop inline-flex">
-                <Shuttle size={13} />
+                <BrandShuttle size={15} angle={90} />
               </span>
               Within the one-game target. Nobody went home short.
             </p>
@@ -155,7 +155,7 @@ export default async function SummaryPage({ params }: { params: Promise<{ code: 
                 <span className="w-28 shrink-0 truncate text-sm sm:w-40">{r.name}</span>
                 <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-court">
                   <div
-                    className={`bar-fill h-full rounded-full ${short ? "bg-amber" : "bg-shuttle"}`}
+                    className={`bar-fill h-full rounded-full ${short ? "bar-heat" : "bar-electric"}`}
                     style={{ width: `${Math.max(4, pct)}%`, ...step(Math.min(i, 18)) }}
                   />
                 </div>

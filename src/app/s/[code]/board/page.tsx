@@ -10,7 +10,8 @@ import { FinishGame } from "@/components/FinishGame";
 import { CountUp } from "@/components/motion/CountUp";
 import { WinBurst } from "@/components/motion/WinBurst";
 import { lastFinished } from "@/components/motion/last-finished";
-import { Shuttle } from "@/components/Shuttle";
+import { LogoMark } from "@/components/Logo";
+import { PALETTE } from "@/lib/palette";
 import { getBoard, getSessionByCode } from "@/server/queries";
 import {
   cancelMatchAction, closeSessionAction, preferenceAction, removePreferenceAction,
@@ -55,7 +56,7 @@ async function Board({ code }: { code: string }) {
     return (
       <div className="card rise p-6 text-center">
         <div className="mx-auto w-fit text-shuttle/70 shuttle-drop">
-          <Shuttle size={44} />
+          <LogoMark size={46} knock={PALETTE.surface} label={null} />
         </div>
         <p className="mt-4 text-sm text-muted">This session has not started yet.</p>
         <form action={startSessionAction} className="mt-4">
@@ -335,7 +336,7 @@ function Tile({
           ? "text-rose"
           : "text-chalk";
   return (
-    <div className="card pop p-3 text-center" style={step(i)}>
+    <div className="card led pop p-3 text-center" style={step(i)}>
       <p className={`text-xl font-extrabold ${color}`}>
         <CountUp value={value} suffix={suffix} />
         {of !== undefined && <span className="text-muted">/{of}</span>}

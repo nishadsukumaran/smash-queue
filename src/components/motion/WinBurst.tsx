@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Confetti } from "@/components/motion/Confetti";
-import { Shuttle } from "@/components/Shuttle";
+import { LogoMark } from "@/components/Logo";
+import { PALETTE } from "@/lib/palette";
 import { buzz } from "@/lib/haptics";
 import type { FinishedMatch } from "@/components/motion/last-finished";
 
@@ -48,10 +49,10 @@ export function WinBurst({ match }: { match: FinishedMatch | null }) {
         role="status"
         aria-live="polite"
       >
-        <div className="celebrate pop w-full max-w-sm overflow-hidden rounded-card border border-shuttle/45 p-4 text-center shadow-2xl">
+        <div className="celebrate led edge-electric pop w-full max-w-sm overflow-hidden rounded-card border border-shuttle/45 p-4 text-center shadow-2xl">
           <div className="relative">
             <div className="mx-auto w-fit text-shuttle shuttle-drop">
-              <Shuttle size={34} />
+              <LogoMark size={36} knock={PALETTE.surface} label={null} />
             </div>
             <p className="mt-2 text-[.62rem] uppercase tracking-[.22em] text-shuttle">
               Court {showing.court} &middot; Game over

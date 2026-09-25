@@ -6,7 +6,7 @@ import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { Elapsed } from "@/components/Elapsed";
-import { Shuttle } from "@/components/Shuttle";
+import { BrandShuttle } from "@/components/Logo";
 import { CountUp } from "@/components/motion/CountUp";
 import { WinBurst } from "@/components/motion/WinBurst";
 import { lastFinished } from "@/components/motion/last-finished";
@@ -116,7 +116,7 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
              * held at arm's length, in a hall with the lights on. Court number
              * is the largest thing on the phone for a reason.
              */
-            <section className="court court-live celebrate rise p-5">
+            <section className="court court-live celebrate rise edge-electric p-5">
               <div className="relative">
                 <div className="flex items-center gap-2">
                   <span className="live-dot" />
@@ -136,7 +136,7 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
                     {myMatch.court}
                   </span>
                   <span className="ml-auto text-shuttle/70 shuttle-spin">
-                    <Shuttle size={26} />
+                    <BrandShuttle size={28} />
                   </span>
                 </div>
 
@@ -172,7 +172,7 @@ export default async function SessionPage({ params }: { params: Promise<{ code: 
               </div>
             </section>
           ) : (
-            <section className="card rise p-4">
+            <section className="card led rise p-4">
               <p className="label">Your status</p>
 
               {me?.checkedInAt ? (

@@ -1,5 +1,6 @@
 /** Session fairness + rating maths. Pure functions, no DB. */
 
+import { PALETTE } from "@/lib/palette";
 export type FairnessReport = {
   score: number;
   spread: number;
@@ -80,8 +81,8 @@ export function updateRatings(
 }
 
 export function ratingBand(rating: number) {
-  if (rating >= 1600) return { label: "Expert", color: "#D7F75B" };
-  if (rating >= 1300) return { label: "Advanced", color: "#3DD9A4" };
-  if (rating >= 1000) return { label: "Intermediate", color: "#7FA396" };
-  return { label: "Beginner", color: "#FFC24B" };
+  if (rating >= 1600) return { label: "Expert", color: PALETTE.volt };
+  if (rating >= 1300) return { label: "Advanced", color: PALETTE.cyan };
+  if (rating >= 1000) return { label: "Intermediate", color: "#5AC8FF" };
+  return { label: "Beginner", color: PALETTE.amber };
 }

@@ -33,7 +33,7 @@ export const users = pgTable(
     phone: text("phone"),
     /** Lowercased on write. Nullable: most players never give one. */
     email: text("email"),
-    avatarColor: text("avatar_color").notNull().default("#3DD9A4"),
+    avatarColor: text("avatar_color").notNull().default("#22E0D5"),
     /** Doubles Elo. 1200 = a brand new player with no history. */
     rating: doublePrecision("rating").notNull().default(1200),
     ratingGames: integer("rating_games").notNull().default(0),

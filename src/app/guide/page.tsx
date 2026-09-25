@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Shuttle } from "@/components/Shuttle";
+import { LogoMark } from "@/components/Logo";
+import { PALETTE } from "@/lib/palette";
 import { GUIDE_HTML, GUIDE_SECTIONS } from "@/generated/guide";
 import { APP_VERSION, RELEASE_CHANNEL, SUPPORT_EMAIL, supportMailto } from "@/lib/brand";
 
@@ -19,7 +20,7 @@ export default function GuidePage() {
     <div className="space-y-5">
       <header className="card relative overflow-hidden p-5">
         <div className="absolute -right-6 -top-6 text-shuttle/10">
-          <Shuttle size={120} />
+          <LogoMark size={120} knock={PALETTE.surface} label={null} />
         </div>
         <p className="label">Guide</p>
         <h1 className="mt-1 text-2xl font-extrabold tracking-tight">

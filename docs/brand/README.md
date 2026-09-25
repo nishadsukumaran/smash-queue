@@ -22,7 +22,7 @@ The wordmark in the lockups is outlined, so the SVGs render the same everywhere 
 | Volt | `#C8F031` | The shuttle, the Q in "SmashQ" |
 | Chalk | `#F5F3EC` | The ring on dark, light backgrounds |
 
-The app's interface keeps its own dark-green palette; Volt sits beside its shuttle green without clashing.
+The app's interface is built from these three: Night Court is the card surface, Volt is every accent, Chalk is the type. The full interface palette — the darker page ground either side of Night Court, and the cyan, amber and rose used for state — lives in `src/app/globals.css` (`@theme`) and is mirrored in `src/lib/palette.ts` for the QR code, the sign-in emails and the confetti, which are drawn outside the stylesheet.
 
 ## Type
 

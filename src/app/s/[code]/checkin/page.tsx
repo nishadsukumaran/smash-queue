@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
 import { SubmitButton } from "@/components/SubmitButton";
-import { Shuttle } from "@/components/Shuttle";
+import { BrandShuttle } from "@/components/Logo";
 import { CheckedIn } from "@/components/motion/CheckedIn";
 import { NewPlayerForm } from "@/components/NewPlayerForm";
 import { joinPolicyOf } from "@/lib/join-policy";
@@ -90,10 +90,10 @@ export default async function CheckInPage({
       <div className="card relative overflow-hidden p-5 text-center rise">
         <div className="rally-bg opacity-30">
           <span style={{ "--dur": "6s", "--delay": "0s" } as React.CSSProperties}>
-            <Shuttle size={30} />
+            <BrandShuttle size={30} />
           </span>
           <span style={{ "--dur": "7.5s", "--delay": "2.4s" } as React.CSSProperties}>
-            <Shuttle size={20} />
+            <BrandShuttle size={20} />
           </span>
         </div>
         <div className="relative">

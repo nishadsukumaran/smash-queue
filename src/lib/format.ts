@@ -60,10 +60,11 @@ export function prettyTime(hhmm: string) {
   return `${hour}:${String(m ?? 0).padStart(2, "0")} ${suffix}`;
 }
 
-export const PLAYER_COLORS = [
-  "#3DD9A4", "#D7F75B", "#FFC24B", "#FF8FA3", "#8BD3FF",
-  "#C792EA", "#7BE3B8", "#FFD98E", "#FF9F7A", "#9DB8FF",
-];
+// Lives in palette.ts with the rest of the theme; re-exported here because
+// every existing caller imports it from format, and colorFor below needs it
+// in scope rather than merely passed through.
+import { PLAYER_COLORS } from "@/lib/palette";
+export { PLAYER_COLORS };
 
 export function colorFor(seed: string) {
   let h = 0;

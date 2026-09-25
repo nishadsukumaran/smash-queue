@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Shuttle } from "@/components/Shuttle";
+import { BrandShuttle } from "@/components/Logo";
 import { SUPPORT_EMAIL, supportMailto } from "@/lib/brand";
 
 export default function NotFound() {
@@ -8,7 +8,7 @@ export default function NotFound() {
       {/* The line the shuttle just landed the wrong side of. */}
       <span className="pointer-events-none absolute inset-x-8 top-[4.6rem] h-px bg-line" />
       <div className="shuttle-drop mx-auto w-fit -rotate-12 text-shuttle/60">
-        <Shuttle size={44} />
+        <BrandShuttle size={46} angle={125} />
       </div>
       <h1 className="mt-4 text-xl font-extrabold">Out of bounds</h1>
       <p className="mt-1 text-sm text-muted">That session code does not exist.</p>

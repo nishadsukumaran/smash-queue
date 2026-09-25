@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Confetti } from "@/components/motion/Confetti";
-import { Shuttle } from "@/components/Shuttle";
+import { LogoMark } from "@/components/Logo";
+import { PALETTE } from "@/lib/palette";
 import { buzz } from "@/lib/haptics";
 
 /**
@@ -45,13 +46,13 @@ export function CheckedIn({
   return (
     <>
       {fire && <Confetti count={90} duration={3000} />}
-      <div className="celebrate card overflow-hidden p-7 text-center">
+      <div className="celebrate card led edge-electric overflow-hidden p-7 text-center">
         <div className="relative">
           {/* The shuttle lands, the court lights come up under it. */}
           <div className="relative mx-auto h-20 w-20">
             <span className="absolute inset-0 rounded-full bg-shuttle/20 blur-xl" />
             <span className="shuttle-drop absolute inset-0 flex items-center justify-center text-shuttle">
-              <Shuttle size={62} />
+              <LogoMark size={64} knock={PALETTE.surface} label={null} />
             </span>
           </div>
 

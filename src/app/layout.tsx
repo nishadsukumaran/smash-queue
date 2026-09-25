@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { PALETTE } from "@/lib/palette";
 import { LogoMark } from "@/components/Logo";
 import { brandFont } from "@/fonts/brand";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#06100D",
+  themeColor: PALETTE.ink,
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",

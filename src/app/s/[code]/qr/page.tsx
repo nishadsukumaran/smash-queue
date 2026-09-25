@@ -5,6 +5,7 @@ import { getSessionByCode } from "@/server/queries";
 import { signCheckInToken } from "@/lib/qr";
 import { requestOrigin } from "@/lib/origin";
 import { prettyDate, prettyTime } from "@/lib/format";
+import { PALETTE } from "@/lib/palette";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ async function Qr({ code }: { code: string }) {
   const svg = await QRCode.toString(url, {
     type: "svg",
     margin: 1,
-    color: { dark: "#06100D", light: "#FFFFFF" },
+    color: { dark: PALETTE.ink, light: "#FFFFFF" },
     errorCorrectionLevel: "M",
   });
 

@@ -1,4 +1,4 @@
-import { Shuttle } from "@/components/Shuttle";
+import { BrandShuttle } from "@/components/Logo";
 
 /**
  * The waiting state: two shuttles rallying over a net.
@@ -22,7 +22,7 @@ export function RallyLoader({ label = "Loading" }: { label?: string }) {
             animation: "rally-left 1.5s cubic-bezier(.4,0,.5,1) infinite",
           }}
         >
-          <Shuttle size={28} />
+          <BrandShuttle size={30} />
         </span>
         <span
           className="absolute left-1/2 top-1/2 text-teal"
@@ -32,7 +32,7 @@ export function RallyLoader({ label = "Loading" }: { label?: string }) {
             animation: "rally-right 1.5s cubic-bezier(.4,0,.5,1) infinite",
           }}
         >
-          <Shuttle size={22} />
+          <BrandShuttle size={24} angle={180} />
         </span>
       </div>
       <p className="text-xs uppercase tracking-[.2em] text-muted">{label}</p>

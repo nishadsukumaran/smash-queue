@@ -2,7 +2,7 @@
 
 import { useFormStatus } from "react-dom";
 import type { ReactNode } from "react";
-import { Shuttle } from "@/components/Shuttle";
+import { BrandShuttle } from "@/components/Logo";
 import { buzz } from "@/lib/haptics";
 
 export function SubmitButton({
@@ -41,7 +41,7 @@ export function SubmitButton({
       {pending ? (
         <>
           <span className="shuttle-spin inline-flex">
-            <Shuttle size={14} />
+            <BrandShuttle size={15} />
           </span>
           {pendingLabel ?? "Working..."}
         </>

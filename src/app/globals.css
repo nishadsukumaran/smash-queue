@@ -1,24 +1,54 @@
 @import "tailwindcss";
 
+/*
+ * Night Court + Volt — the palette from the SmashQ brand kit (docs/brand).
+ *
+ * Three of these are the brand's own hexes rather than something close to
+ * them: Night Court #101A2E is --color-surface, Volt #C8F031 is
+ * --color-shuttle, Chalk #F5F3EC is --color-chalk. The rest are a darker
+ * ground and a lighter step either side, so a card sits ON Night Court rather
+ * than beside it. The result is that the interface and the mark are finally
+ * the same colour scheme instead of two that tolerate each other.
+ *
+ * Mirrored in src/lib/palette.ts for the places CSS cannot reach — the QR
+ * code, the sign-in emails, the confetti. Change both together.
+ */
 @theme {
-  --color-ink: #06100D;
-  --color-court: #0A1A15;
-  --color-surface: #0F241D;
-  --color-surface-2: #16342A;
-  --color-line: #204A3C;
-  --color-shuttle: #D7F75B;
-  --color-shuttle-dim: #A8C93F;
-  --color-teal: #3DD9A4;
-  --color-amber: #FFC24B;
-  --color-rose: #FF6B6B;
-  --color-chalk: #EAF6F0;
-  --color-muted: #7FA396;
+  --color-ink: #080D1A;
+  --color-court: #0C1424;
+  --color-surface: #101A2E;
+  --color-surface-2: #19263F;
+  --color-line: #2A3A5C;
+  --color-shuttle: #C8F031;
+  --color-shuttle-dim: #A9DB1E;
+  --color-teal: #22E0D5;
+  --color-amber: #FFB020;
+  --color-rose: #FF4D6D;
+  --color-chalk: #F5F3EC;
+  /* Paragraphs. 10.8:1 on Night Court. `muted` is for labels, meta and units
+     only — it was doing body-copy duty and that is why the page read grey. */
+  --color-body: #C2CCDF;
+  --color-muted: #8496B8;
+  /* Ink laid ON an accent fill (Volt, cyan). One token, so a palette swap is
+     the theme block and nothing else. */
+  --color-on-accent: #0A1120;
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 
   --radius-card: 18px;
+}
+
+:root {
+  /* Volt with a sheen through it, rather than a flat fill. */
+  --grad-volt: linear-gradient(135deg, #DCFF57 0%, #C8F031 48%, #A9DB1E 100%);
+  /* The electric one: Volt into cyan. Used where the app wants to shout —
+     a live court's rim, a filling bar, the win burst. */
+  --grad-electric: linear-gradient(135deg, #C8F031 0%, #6FEA8F 42%, #22E0D5 100%);
+  --grad-heat: linear-gradient(135deg, #FFB020 0%, #FF4D6D 100%);
+  --glow-volt: 0 0 28px -6px color-mix(in oklab, var(--color-shuttle) 70%, transparent);
+  --glow-cyan: 0 0 28px -6px color-mix(in oklab, var(--color-teal) 70%, transparent);
 }
 
 * { -webkit-tap-highlight-color: transparent; }
@@ -33,9 +63,9 @@ html, body {
 body {
   /* Faint badminton court lines woven into the background. */
   background-image:
-    radial-gradient(120% 70% at 50% -10%, rgba(61, 217, 164, 0.10), transparent 60%),
-    linear-gradient(rgba(32, 74, 60, 0.35) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(32, 74, 60, 0.35) 1px, transparent 1px);
+    radial-gradient(120% 70% at 50% -10%, color-mix(in oklab, var(--color-teal) 10%, transparent), transparent 60%),
+    linear-gradient(color-mix(in oklab, var(--color-line) 35%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--color-line) 35%, transparent) 1px, transparent 1px);
   background-size: 100% 100%, 100% 88px, 88px 100%;
   background-attachment: fixed;
   min-height: 100dvh;
@@ -43,7 +73,15 @@ body {
 
 @layer components {
   .card {
-    background: color-mix(in oklab, var(--color-surface) 92%, transparent);
+    background-color: color-mix(in oklab, var(--color-surface) 92%, transparent);
+    /* The lit top edge, when the element wears .edge-electric. Every themed
+       surface opts into this layer the same way, so the edge composes with
+       whatever the surface already paints instead of replacing it — which is
+       what a plain `background-image` on .edge-electric would do. */
+    background-image: var(--edge-image, none);
+    background-repeat: no-repeat;
+    background-size: var(--edge-size, auto);
+    background-position: top center;
     border: 1px solid var(--color-line);
     border-radius: var(--radius-card);
     backdrop-filter: blur(6px);
@@ -57,9 +95,21 @@ body {
   }
   .btn:active:not(:disabled) { transform: scale(.97); }
   .btn:disabled { opacity: .42; cursor: not-allowed; }
-  .btn-primary { background: var(--color-shuttle); color: #10210A; }
+  .btn-primary {
+    background-image: var(--grad-volt);
+    color: var(--color-on-accent);
+    box-shadow: 0 1px 0 color-mix(in oklab, #FFFFFF 30%, transparent) inset,
+                var(--glow-volt);
+  }
   .btn-primary:hover:not(:disabled) { filter: brightness(1.07); }
-  .btn-teal { background: var(--color-teal); color: #04241A; }
+  .btn-teal {
+    background-image: linear-gradient(135deg,
+      color-mix(in oklab, var(--color-teal) 100%, #FFFFFF 14%),
+      var(--color-teal));
+    color: var(--color-on-accent);
+    box-shadow: 0 1px 0 color-mix(in oklab, #FFFFFF 26%, transparent) inset,
+                var(--glow-cyan);
+  }
   .btn-ghost {
     background: transparent; border-color: var(--color-line); color: var(--color-chalk);
   }
@@ -89,18 +139,30 @@ body {
   /* A court card that actually looks like a badminton court. */
   .court {
     position: relative; overflow: hidden;
-    background:
-      linear-gradient(180deg, rgba(13,48,37,.95), rgba(9,32,25,.95));
+    background-image:
+      var(--edge-image, none),
+      repeating-linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--color-chalk) 4%, transparent) 0px,
+        color-mix(in oklab, var(--color-chalk) 4%, transparent) 1px,
+        transparent 1px,
+        transparent 3px),
+      linear-gradient(180deg,
+        color-mix(in oklab, var(--color-surface) 96%, transparent),
+        color-mix(in oklab, var(--color-court) 96%, transparent));
+    background-repeat: no-repeat, repeat, no-repeat;
+    background-size: var(--edge-size, auto), auto, auto;
+    background-position: top center, top left, top left;
     border: 1px solid var(--color-line);
     border-radius: var(--radius-card);
   }
   .court::before {
     content: ""; position: absolute; inset: 10px;
-    border: 1.5px solid rgba(234, 246, 240, .10); border-radius: 10px;
+    border: 1.5px solid color-mix(in oklab, var(--color-chalk) 10%, transparent); border-radius: 10px;
     pointer-events: none;
   }
   .court-net {
-    position: relative; height: 1px; background: rgba(234,246,240,.16);
+    position: relative; height: 1px; background: color-mix(in oklab, var(--color-chalk) 16%, transparent);
   }
   .court-net::after {
     content: "NET"; position: absolute; left: 50%; top: 50%;
@@ -322,10 +384,12 @@ body {
 }
 
 @keyframes glow-breathe {
-  0%,100% { box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-shuttle) 34%, transparent),
-                        0 0 22px -6px color-mix(in oklab, var(--color-shuttle) 55%, transparent); }
-  50%     { box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-shuttle) 60%, transparent),
-                        0 0 40px -4px color-mix(in oklab, var(--color-shuttle) 75%, transparent); }
+  0%,100% { box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-shuttle) 45%, transparent),
+                        0 0 34px -8px color-mix(in oklab, var(--color-shuttle) 70%, transparent),
+                        0 0 90px -30px color-mix(in oklab, var(--color-teal) 60%, transparent); }
+  50%     { box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-shuttle) 80%, transparent),
+                        0 0 56px -6px color-mix(in oklab, var(--color-shuttle) 88%, transparent),
+                        0 0 120px -24px color-mix(in oklab, var(--color-teal) 75%, transparent); }
 }
 
 @keyframes rise-in {
@@ -342,6 +406,14 @@ body {
 @keyframes flash-value {
   0%   { color: var(--color-shuttle); transform: scale(1.18); }
   100% { color: inherit; transform: scale(1); }
+}
+
+/* The slow diagonal light that travels across a stadium LED board. */
+@keyframes led-sweep {
+  0%   { transform: translateX(-60%) translateY(-30%) rotate(18deg); opacity: 0; }
+  12%  { opacity: .5; }
+  55%  { opacity: .5; }
+  100% { transform: translateX(160%) translateY(30%) rotate(18deg); opacity: 0; }
 }
 
 @keyframes shimmer-sweep {
@@ -461,9 +533,15 @@ body {
 /* The full-bleed celebration behind a win or a check-in. */
 .celebrate {
   position: relative; overflow: hidden;
-  background:
+  background-image:
+    var(--edge-image, none),
     radial-gradient(120% 90% at 50% 0%, color-mix(in oklab, var(--color-shuttle) 18%, transparent), transparent 62%),
-    linear-gradient(180deg, rgba(13,48,37,.96), rgba(9,32,25,.96));
+    linear-gradient(180deg,
+      color-mix(in oklab, var(--color-surface) 97%, transparent),
+      color-mix(in oklab, var(--color-court) 97%, transparent));
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-size: var(--edge-size, auto), auto, auto;
+  background-position: top center, top left, top left;
 }
 .celebrate::before {
   content: ""; position: absolute; inset: -40%;
@@ -475,15 +553,79 @@ body {
   pointer-events: none;
 }
 
+/*
+ * The LED board texture. Scanlines at 3px, near-invisible on their own, plus
+ * one slow diagonal pass of light. Both are painted by pseudo-elements on a
+ * wrapper class rather than on .card, so a page opts in per surface and a
+ * screen full of cards does not end up with a dozen sweeps out of phase.
+ */
+.led {
+  position: relative;
+  isolation: isolate;
+}
+/*
+ * Both textures sit at z-index -1 rather than 0.
+ *
+ * The first version put them at 0 and lifted the content with
+ * `.led > * { position: relative; z-index: 1 }`, which works until a child
+ * wants to be positioned itself: that rule is unlayered, so it beat Tailwind's
+ * `absolute` utility and quietly pinned every absolutely-positioned child back
+ * into flow — the tournament bracket and the hero's flying shuttles both
+ * vanished. A negative index needs no counter-rule: `isolation: isolate` keeps
+ * it inside this card, and an element's own background still paints beneath
+ * its negative children, so the texture lands between the two.
+ */
+.led::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  border-radius: inherit;
+  background: repeating-linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-chalk) 4%, transparent) 0px,
+    color-mix(in oklab, var(--color-chalk) 4%, transparent) 1px,
+    transparent 1px,
+    transparent 3px);
+  opacity: .5;
+}
+.led::after {
+  content: ""; position: absolute; top: -40%; bottom: -40%; width: 38%;
+  z-index: -1; pointer-events: none;
+  background: linear-gradient(90deg, transparent,
+    color-mix(in oklab, var(--color-teal) 14%, transparent), transparent);
+  animation: led-sweep 7s cubic-bezier(.4,0,.5,1) infinite;
+  animation-delay: var(--sweep-delay, 0s);
+}
+/*
+ * An accent hairline along the top of a surface — the lit edge of a
+ * scoreboard. It sets two custom properties rather than a background, because
+ * every surface class here (.card, .court, .celebrate) already owns both of
+ * its pseudo-elements and its own background stack. The hosts read these
+ * properties as their first background layer; an element without the class
+ * resolves them to `none` and paints exactly as before.
+ */
+.edge-electric {
+  --edge-image: var(--grad-electric);
+  --edge-size: 74% 2px;
+}
+
+/* Progress and fairness bars, lit rather than flat. */
+.bar-electric { background-image: var(--grad-electric); }
+.bar-heat { background-image: var(--grad-heat); }
+
 /* A live row in the queue: yours, highlighted, gently breathing. */
 .queue-me {
-  background: color-mix(in oklab, var(--color-shuttle) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-shuttle) 38%, transparent);
+  background:
+    linear-gradient(90deg,
+      color-mix(in oklab, var(--color-shuttle) 16%, transparent),
+      color-mix(in oklab, var(--color-teal) 10%, transparent));
+  border: 1px solid color-mix(in oklab, var(--color-shuttle) 45%, transparent);
   animation: glow-breathe 3s ease-in-out infinite;
 }
 
 /* Avatar of somebody currently on court. */
-.on-court-ring { box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-shuttle) 65%, transparent); }
+.on-court-ring {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-shuttle) 75%, transparent),
+              0 0 14px -4px color-mix(in oklab, var(--color-shuttle) 80%, transparent);
+}
 
 /* Safe-area padding so nothing hides under an iPhone home bar. */
 .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
@@ -506,6 +648,260 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: .001ms !important;
   }
-  .rally-bg, .celebrate::before, .trophy::after { display: none; }
+  .rally-bg, .hero-arc, .celebrate::before, .trophy::after, .led::after { display: none; }
   .rise, .pop, .bar-fill, .score-digit, .shuttle-drop { opacity: 1; transform: none; }
+}
+
+/* ==================================================================== */
+/*  LANDING                                                             */
+/* ==================================================================== */
+
+/*
+ * Scroll-driven reveals for the marketing page.
+ *
+ * Guarded twice. The @supports test includes `animation-range: entry` as well
+ * as `animation-timeline: view()`, because a browser can ship the first
+ * without the second and would otherwise run the animation over the document
+ * timeline — every section playing its entrance at once, on load. Firefox has
+ * neither, so it is the fallback case, and the fallback is simply that the
+ * content is already in its final state: nothing here starts at opacity 0
+ * outside the guard, so an unsupported browser shows a static page rather than
+ * an empty one. No polyfill, no IntersectionObserver, no JavaScript at all.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @supports ((animation-timeline: view()) and (animation-range: entry)) {
+    @keyframes reveal-up {
+      from { opacity: 0; transform: translateY(34px) scale(.985); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    .reveal {
+      animation: reveal-up linear backwards;
+      animation-timeline: view();
+      /* Finish well before the element reaches the middle of the screen —
+         a reveal still running when you are reading it is a distraction. */
+      animation-range: entry 8% cover 34%;
+    }
+  }
+}
+
+/* The hero's shuttle, arcing behind the headline on a long loop. */
+.hero-arc {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+}
+.hero-arc > span {
+  position: absolute; top: 55%; left: 50%;
+  animation: shuttle-serve var(--dur, 9s) cubic-bezier(.3,.05,.6,1) infinite;
+  animation-delay: var(--delay, 0s);
+  opacity: 0;
+}
+
+/* Section eyebrow: a short lit rule and a word. */
+.eyebrow {
+  display: inline-flex; align-items: center; gap: .6rem;
+  font-size: .66rem; font-weight: 800; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--color-shuttle);
+}
+.eyebrow::before {
+  content: ""; width: 26px; height: 2px; border-radius: 2px;
+  background-image: var(--grad-electric);
+}
+
+/* A feature tile's icon plate. */
+.plate {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 42px; height: 42px; border-radius: 13px;
+  background: color-mix(in oklab, var(--color-shuttle) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-shuttle) 32%, transparent);
+  color: var(--color-shuttle);
+}
+.plate-cyan {
+  background: color-mix(in oklab, var(--color-teal) 14%, transparent);
+  border-color: color-mix(in oklab, var(--color-teal) 32%, transparent);
+  color: var(--color-teal);
+}
+
+/* The two big showcase blocks — tournaments and communities. */
+.showcase {
+  position: relative; overflow: hidden;
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in oklab, var(--color-shuttle) 28%, transparent);
+  background-image:
+    var(--edge-image, none),
+    radial-gradient(90% 120% at 12% 0%, color-mix(in oklab, var(--color-shuttle) 16%, transparent), transparent 58%),
+    radial-gradient(80% 120% at 92% 10%, color-mix(in oklab, var(--color-teal) 15%, transparent), transparent 60%),
+    linear-gradient(180deg,
+      color-mix(in oklab, var(--color-surface) 97%, transparent),
+      color-mix(in oklab, var(--color-court) 97%, transparent));
+  background-repeat: no-repeat;
+  background-size: var(--edge-size, auto), auto, auto, auto;
+  background-position: top center, top left, top left, top left;
+}
+.showcase-cyan { border-color: color-mix(in oklab, var(--color-teal) 30%, transparent); }
+
+/* A mock of a knockout bracket, drawn beside the tournaments copy. Quiet
+   enough to sit behind text at small widths, legible enough to read as a draw
+   at large ones — at 16% chalk the earlier version was neither. */
+.bracket-line {
+  stroke: color-mix(in oklab, var(--color-chalk) 30%, transparent);
+  stroke-width: 1.75; fill: none; stroke-linecap: round;
+}
+.bracket-line-hot {
+  stroke: color-mix(in oklab, var(--color-teal) 75%, transparent);
+  stroke-width: 2.25; fill: none; stroke-linecap: round;
+}
+.bracket-seed { fill: color-mix(in oklab, var(--color-chalk) 42%, transparent); }
+
+/* Numbers big enough to be the point of their own row. */
+.figure { font-size: clamp(1.75rem, 6vw, 2.6rem); font-weight: 800; line-height: 1; }
+
+/* ----------------------------------------------------------- posters -- */
+
+/*
+ * The landing speaks in statements, not paragraphs. One line per panel, set
+ * large enough that it is the panel, with a caption underneath doing the
+ * explaining in under ten words.
+ */
+/* Weight and rhythm are shared: Tailwind's preflight resets headings to the
+   body weight, so a size-only modifier class renders a poster line in regular
+   and quietly undoes the whole idea. */
+.poster, .poster-sm, .poster-xs {
+  font-weight: 800;
+  line-height: .95;
+  text-wrap: balance;
+}
+.poster    { font-size: clamp(2.35rem, 10vw, 4.75rem); letter-spacing: -.038em; line-height: .93; }
+.poster-sm { font-size: clamp(1.85rem, 7vw, 3rem);     letter-spacing: -.032em; }
+.poster-xs { font-size: clamp(1.5rem, 5.4vw, 2.2rem);  letter-spacing: -.026em; }
+
+/* A caption under a poster line. Short by construction. */
+.caption {
+  color: var(--color-body);
+  font-size: clamp(.95rem, 2.6vw, 1.05rem);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.words span { display: inline-block; white-space: pre; }
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports ((animation-timeline: view()) and (animation-range: entry)) {
+    @keyframes word-up {
+      from { opacity: 0; transform: translateY(.42em) rotate(-2.5deg); }
+    }
+    /*
+     * Each word owns its own slice of the view timeline. A scroll timeline
+     * ignores animation-delay, so the stagger has to live in the range itself
+     * — hence the calc() on --i rather than a delay.
+     */
+    .words span {
+      animation: word-up linear backwards;
+      animation-timeline: view();
+      animation-range:
+        entry calc(4% + var(--i, 0) * 4.5%)
+        entry calc(48% + var(--i, 0) * 4.5%);
+    }
+  }
+}
+
+/* Panels alternate so the page has a rhythm rather than a column of cards. */
+.panel {
+  position: relative;
+  padding-block: clamp(2.5rem, 9vw, 4.5rem);
+  border-top: 1px solid color-mix(in oklab, var(--color-line) 70%, transparent);
+}
+.panel:first-of-type { border-top: 0; }
+
+/* The index numeral beside a poster line. */
+.panel-no {
+  font-size: .72rem; font-weight: 800; letter-spacing: .24em;
+  color: color-mix(in oklab, var(--color-shuttle) 70%, transparent);
+}
+
+/* ------------------------------------------------------------ slider -- */
+
+/*
+ * The hero slider.
+ *
+ * The swipe itself is scroll-snap, so it works with no JavaScript at all and
+ * uses the platform's own fling physics rather than an imitation of them —
+ * which matters most in a PWA, where this is the app. JavaScript only adds
+ * auto-advance and the dot state, and takes both away the moment the person
+ * touches it.
+ */
+.slider {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.slider::-webkit-scrollbar { display: none; }
+
+.slide {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports ((animation-timeline: view()) and (animation-range: entry)) {
+    /* One continuous animation across the whole pass, rather than separate
+       entry and exit ones: a slide is dim at both edges and full in the
+       middle, and the midpoint keyframe is what makes that one curve. */
+    @keyframes slide-pass {
+      0%   { opacity: .2; transform: scale(.88) translateY(12px); }
+      50%  { opacity: 1;  transform: none; }
+      100% { opacity: .2; transform: scale(.88) translateY(12px); }
+    }
+    .slide > * {
+      animation: slide-pass auto linear both;
+      animation-timeline: view(inline);
+    }
+  }
+}
+
+/* The dots. Real buttons, because they are controls and get tabbed to. */
+.dot {
+  width: 7px; height: 7px; border-radius: 999px;
+  background: color-mix(in oklab, var(--color-chalk) 24%, transparent);
+  transition: width .28s cubic-bezier(.2,.9,.3,1), background .28s;
+}
+.dot-on {
+  width: 26px;
+  background-image: var(--grad-electric);
+}
+
+/* The one thing: free. */
+.free-pill {
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .34rem .85rem .34rem .6rem;
+  border-radius: 999px;
+  font-size: .7rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--color-on-accent);
+  background-image: var(--grad-volt);
+  box-shadow: var(--glow-volt);
+}
+
+/* A first screen that fills the app window in standalone, minus the header. */
+.first-screen {
+  min-height: calc(100dvh - 5.5rem);
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/*
+ * Short phones. The fixed parts of the hero — mark, pill, headline, buttons —
+ * add up to more than a 640px-tall window can hold at the default sizes, and
+ * the buttons end up below the fold on the one screen that is the whole pitch.
+ * The slider is the flexible part, so everything else gets smaller and it
+ * absorbs whatever is left.
+ */
+@media (max-height: 720px) {
+  .first-screen { min-height: calc(100dvh - 4.25rem); }
+  .first-screen .poster    { font-size: clamp(1.75rem, 7.5vw, 2.4rem); }
+  .first-screen .poster-sm { font-size: clamp(1.35rem, 5.6vw, 1.85rem); }
+  .first-screen .caption   { font-size: .88rem; line-height: 1.4; }
+  .first-screen .free-pill { font-size: .62rem; padding-block: .26rem; }
+  .first-screen .plate     { width: 34px; height: 34px; border-radius: 11px; }
 }

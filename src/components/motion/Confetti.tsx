@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { CONFETTI_COLORS } from "@/lib/palette";
 
 /**
  * A burst of shuttlecocks, drawn on a canvas that covers the viewport and then
@@ -40,7 +41,7 @@ export function Confetti({
     canvas.style.height = `${h}px`;
     ctx.scale(dpr, dpr);
 
-    const COLORS = ["#D7F75B", "#3DD9A4", "#FFC24B", "#EAF6F0", "#8BD3FF"];
+    const COLORS = CONFETTI_COLORS;
 
     // Two launch points, left and right of centre, like a pair of serves.
     const particles = Array.from({ length: count }, (_, i) => {
