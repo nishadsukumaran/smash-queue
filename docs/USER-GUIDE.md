@@ -389,9 +389,15 @@ The last owner can't be removed or demoted — appoint another owner first.
 
 ### Starting a community
 
-Any registered player can ask for one: **Profile → Start a community**, or
-**Communities → Start a community**. Tell us the name, where and when you play. Once it's
-approved you're its owner, and the answer shows up on your profile.
+**Profile → Start a community**, or **Communities → Start a community**. Tell us the name,
+where and when you play.
+
+**Your first community is free and instant.** It's created the moment you fill the form, you
+own it, and you can add venues, sessions and members straight away.
+
+Want a **second** one? That goes to the platform for a quick look. Same form; the answer
+shows up on your profile, and when it's approved that community is yours in exactly the same
+way. Communities you've deleted don't count, so your first one is always on the house.
 
 ---
 
@@ -403,10 +409,10 @@ your profile (or go to `/hq`):
 - **Start a community for someone** — name, area, and the owner's player number (from their
   profile; they need an account first). They become its only owner and see the ownership
   notice when they next open the app. You get no access inside it. Enter your own number to
-  start one you'll run yourself, or just use **Start a community** under Communities, which
-  for the platform admin creates it straight away instead of sending a request.
-- **Requests to start a community** — approve or decline, with an optional note back. On
-  approval the requester becomes the owner.
+  start one you'll run yourself.
+- **Requests for a second community** — everybody's first community is created without you,
+  so these are people who already run one and want another. Approve or decline, with an
+  optional note back.
 - **Totals** — how many communities, members and sessions. Counts only; no names.
 - **Suspend** — hides a community being used for something it shouldn't be, without touching
   anything inside it. **Restore** undoes it.

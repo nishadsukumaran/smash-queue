@@ -32,6 +32,7 @@ import {
 } from "@/db/schema";
 import { INVITE_CODE_LENGTH, inviteCode as mintInviteCode, newId, sessionCode } from "@/lib/ids";
 import { JOIN_MISSES_PER_HOUR, joinKey, overLimit, recordMiss } from "@/lib/rate";
+import { canStartFreely } from "@/server/queries";
 import { uniqueSlug } from "@/lib/slug";
 import { joinPolicyOf } from "@/lib/join-policy";
 import {
@@ -102,9 +103,12 @@ async function ownerCount(groupId: string) {
 /* ------------------------------------------------ asking for a community */
 
 /**
- * Any registered player can ask to start a community. The platform admin
- * approves it, and the person who asked becomes its owner — nobody else is
- * put in charge of it on their behalf.
+ * Starting a community.
+ *
+ * Your first one is yours to start: nobody needs to approve a person setting
+ * up the group they already run on a Saturday. A second one is a request the
+ * platform admin decides on, which is where someone creating communities in
+ * bulk runs into a person.
  */
 export async function requestCommunity(input: {
   name: string;
@@ -128,9 +132,9 @@ export async function requestCommunity(input: {
   if (open.length >= 2)
     return { ok: false, message: "You already have requests waiting. Hang on for those first." };
 
-  // The platform admin would only be asking themselves. They get it straight
-  // away and own it as a person, exactly like anyone whose request is approved.
-  if (isPlatformAdmin(account)) {
+  // First one, or the platform admin (who would only be asking themselves):
+  // created on the spot, owned by them, exactly as an approved request is.
+  if (await canStartFreely(account.id, isPlatformAdmin(account))) {
     const now = new Date();
     const info = {
       name,

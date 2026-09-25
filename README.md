@@ -70,7 +70,7 @@ vs outstanding, settled before everyone leaves. The platform can't see in or tak
 | :--- | :--- |
 | 🎨 **New brand** | The Shuttle Q mark and SmashQ wordmark, in the app and as a full kit in [`docs/brand`](docs/brand) |
 | 👤 **Accounts for everyone** | Any player registers with an email code; every account gets a player number (#1001 on) and a phone PIN |
-| 🏘️ **Owner-run communities** | Players ask for a community, the platform approves, the requester owns it. Public or private, open, approval or invite-only |
+| 🏘️ **Owner-run communities** | Your first community is created the moment you ask for it — a second one goes to the platform for approval. Public or private, open, approval or invite-only |
 | 🔔 **Push notifications** | Put on court, waitlist spot, community notices, invitations, and a reminder on the day. One tap to switch on |
 | 🔑 **Short codes, safely** | 4-digit sign-in codes and 4-character invite codes, with daily and hourly guess limits behind them |
 | 🛡️ **PIN control** | Owners can switch the shared coordinator PIN off; ten wrong guesses in an hour lock it |
@@ -375,15 +375,18 @@ including the platform, can see in or take it over.
 
 | Role | Scope | Can |
 | :--- | :--- | :--- |
-| **Platform admin** | The platform (`/hq`) | Approve or decline requests for new communities, or start one directly for a named owner; see totals, suspend one for abuse. **Nothing inside any community** |
+| **Platform admin** | The platform (`/hq`) | Decide on requests for a *second* community, or start one directly for a named owner; see totals, suspend one for abuse. **Nothing inside any community** |
 | **Owner** (and co-owners) | One community | Everything below, plus: appoint organizers and co-owners, decide visibility, delete the community |
 | **Organizer** | One community | Venues, sessions, fees, members, join policy, invitations |
 | **Coordinator** | One community | The court board, check-in and payments on the night |
 | **Player** | Communities they joined | Book, check in, play; ask to help run it |
 
-Any registered player can **ask for a community**. When the platform admin approves, the
-requester becomes its owner, and is shown an ownership notice once — accepted and recorded —
-that spells out what the platform will never do. The notice is only true because
+Any registered player can **start a community**. The first one is theirs on the spot: nobody
+needs to approve a person setting up the group they already run on a Saturday. A second one
+is a request the platform admin decides on, which is where somebody minting communities in
+bulk meets a human. Either way the person who asked becomes its owner, and is shown an
+ownership notice once — accepted and recorded — that spells out what the platform will never
+do. The notice is only true because
 permissions come from membership alone: there is no platform-admin shortcut anywhere in
 `lib/auth`, and the end-to-end suite forges owner-only actions as an organizer and as the
 platform admin to prove it.

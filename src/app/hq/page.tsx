@@ -81,7 +81,11 @@ export default async function PlatformHome({
       </section>
 
       <section className="space-y-2">
-        <h2 className="label">Requests to start a community ({requests.length})</h2>
+        <h2 className="label">Requests for a second community ({requests.length})</h2>
+        <p className="card p-4 text-xs text-muted">
+          Everybody&apos;s first community is created without you. These are people who
+          already run one and want another.
+        </p>
         {requests.length === 0 && (
           <p className="card p-4 text-sm text-muted">Nothing waiting.</p>
         )}

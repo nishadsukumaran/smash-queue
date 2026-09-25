@@ -4,8 +4,8 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { RequestRoleForm, SetPinForm } from "@/components/AccountForms";
 import { PushToggle } from "@/components/PushToggle";
 import {
-  getPlayerStats, myCommunityRecords, myCommunityRequests, myDeletedCommunities, myInvites,
-  myRoleRequests,
+  canStartFreely, getPlayerStats, myCommunityRecords, myCommunityRequests, myDeletedCommunities,
+  myInvites, myRoleRequests,
 } from "@/server/queries";
 import { forgetDeviceAction, revokeDeviceAction, signOutAction } from "@/server/auth-actions";
 import {
@@ -51,6 +51,7 @@ export default async function MePage() {
       listMyDevices(account.id),
       pinCandidate(),
     ]);
+  const freeCommunity = await canStartFreely(account.id, account.platformAdmin);
   const hasPinHere = Boolean(pin && pin.playerNo === account.playerNo);
   const askedFor = new Set(roleAsks.map((r) => r.group.id));
 
@@ -233,7 +234,7 @@ export default async function MePage() {
         <div className="flex items-center justify-between">
           <h2 className="label">Start a community</h2>
           <Link href="/communities/new" className="btn btn-ghost btn-sm">
-            Ask for one
+            {freeCommunity ? "Start one" : "Ask for one"}
           </Link>
         </div>
         {requests.length > 0 && (

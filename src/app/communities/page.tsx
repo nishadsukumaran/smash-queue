@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SubmitButton } from "@/components/SubmitButton";
 import { JoinCodeForm } from "@/components/JoinCommunityForm";
-import { listPublicCommunities } from "@/server/queries";
+import { canStartFreely, listPublicCommunities } from "@/server/queries";
 import { switchCommunityAction } from "@/server/community-actions";
 import { myCommunities } from "@/lib/tenant";
 import { currentAccount } from "@/lib/auth";
@@ -31,7 +31,11 @@ export default async function CommunitiesPage({
 
   if (!signedIn) return <FrontDoor unknownCode={code === "unknown"} />;
 
-  const [listed, mine] = await Promise.all([listPublicCommunities(), myCommunities(account)]);
+  const [listed, mine, freeCommunity] = await Promise.all([
+    listPublicCommunities(),
+    myCommunities(account),
+    canStartFreely(account!.id, account!.platformAdmin),
+  ]);
   const mineIds = new Set(mine.map((m) => m.group.id));
 
   return (
@@ -100,7 +104,11 @@ export default async function CommunitiesPage({
       <section className="card flex flex-wrap items-center gap-3 p-4">
         <div className="min-w-0 flex-1">
           <p className="font-semibold">Run your own?</p>
-          <p className="text-xs text-muted">Ask for a community and you&apos;ll be its owner.</p>
+          <p className="text-xs text-muted">
+            {freeCommunity
+              ? "Your first one is yours to start, right now."
+              : "Ask for a second community and the platform takes a quick look."}
+          </p>
         </div>
         <Link href="/communities/new" className="btn btn-ghost btn-sm">
           Start a community

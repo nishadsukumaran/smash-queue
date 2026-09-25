@@ -1027,3 +1027,25 @@ export async function registeredAmong(userIds: string[]) {
     .where(inArray(authEmails.userId, userIds));
   return new Set(rows.map((r) => r.id));
 }
+
+/** Communities this person already owns. Deleted ones don't count against them. */
+async function ownedCommunities(userId: string) {
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(groupMembers)
+    .innerJoin(groups, eq(groups.id, groupMembers.groupId))
+    .where(
+      and(
+        eq(groupMembers.userId, userId),
+        eq(groupMembers.role, "owner"),
+        eq(groupMembers.status, "active"),
+        isNull(groups.deletedAt),
+      ),
+    );
+  return n;
+}
+
+/** Whether this person's next community is created on the spot or has to be asked for. */
+export async function canStartFreely(userId: string, platformAdmin = false) {
+  return platformAdmin || (await ownedCommunities(userId)) === 0;
+}
