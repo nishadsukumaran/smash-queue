@@ -78,6 +78,20 @@
       "when": 1790060624285,
       "tag": "0010_rate_events",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790315921072,
+      "tag": "0011_tournaments",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790317916078,
+      "tag": "0012_player_profile",
+      "breakpoints": true
     }
   ]
 }

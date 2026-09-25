@@ -101,6 +101,14 @@ export default async function CommunitiesPage({
         ))}
       </section>
 
+      <Link href="/tournaments" className="card flex flex-wrap items-center gap-3 p-4 hover:bg-surface-2">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">Tournaments</p>
+          <p className="text-xs text-muted">Open tournaments any SmashQ player can enter, and your communities&apos; own.</p>
+        </div>
+        <span className="font-bold text-teal">→</span>
+      </Link>
+
       <section className="card flex flex-wrap items-center gap-3 p-4">
         <div className="min-w-0 flex-1">
           <p className="font-semibold">Run your own?</p>

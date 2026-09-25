@@ -10,6 +10,8 @@ import { joinPolicyOf } from "@/lib/join-policy";
 import { isMemberOf } from "@/lib/tenant";
 import { currentAccount } from "@/lib/auth";
 import { money, prettyDate, prettyTime } from "@/lib/format";
+import { publicUpcomingForGroup } from "@/server/tournament-queries";
+import { TournamentCardView } from "@/components/tournament/bits";
 
 export const dynamic = "force-dynamic";
 
@@ -30,11 +32,12 @@ export default async function CommunityPage({ params }: { params: Promise<{ slug
   const signedIn = Boolean(account?.onboarded);
   const showSchedule = group.visibility === "public" && group.settings?.previewSchedule !== false;
 
-  const [summary, staff, member, schedule] = await Promise.all([
+  const [summary, staff, member, schedule, cups] = await Promise.all([
     communitySummary(group.id),
     listOrganizers(group.id),
     isMemberOf(group.id, account),
     showSchedule ? schedulePreview(group.id) : Promise.resolve([]),
+    publicUpcomingForGroup(group.id),
   ]);
   const policy = joinPolicyOf(group.settings);
   const owners = staff.filter((s) => s.membership.role === "owner");
@@ -75,6 +78,15 @@ export default async function CommunityPage({ params }: { params: Promise<{ slug
             ))}
           </ul>
           <p className="mt-2 text-xs text-muted">Join to book a place and see who&apos;s playing.</p>
+        </section>
+      )}
+
+      {cups.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="label px-1">Tournaments open to everyone</h2>
+          {cups.map((c) => (
+            <TournamentCardView key={c.t.id} c={c} />
+          ))}
         </section>
       )}
 

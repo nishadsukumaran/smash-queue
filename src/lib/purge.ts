@@ -4,7 +4,8 @@ import { db } from "@/db";
 import {
   announcementReads, announcements, authEmails, bookings, checkIns, communityRequests,
   groupInvites, groupMembers, groups, matchPlayers, matchScores, matches, notifications,
-  overrides, payments, preferences, roleRequests, sessionCosts, sessions, trustedDevices, users,
+  overrides, payments, preferences, roleRequests, sessionCosts, sessions, tournamentCategories,
+  tournamentEntries, tournamentMatches, tournamentPrizes, tournaments, trustedDevices, users,
   venues,
 } from "@/db/schema";
 
@@ -83,6 +84,17 @@ export async function purgeCommunity(groupId: string) {
     await db.delete(checkIns).where(inArray(checkIns.sessionId, sessionIds));
     await db.delete(bookings).where(inArray(bookings.sessionId, sessionIds));
     await db.delete(sessions).where(inArray(sessions.id, sessionIds));
+  }
+
+  const tournamentIds = (
+    await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.groupId, groupId))
+  ).map((r) => r.id);
+  if (tournamentIds.length) {
+    await db.delete(tournamentMatches).where(inArray(tournamentMatches.tournamentId, tournamentIds));
+    await db.delete(tournamentPrizes).where(inArray(tournamentPrizes.tournamentId, tournamentIds));
+    await db.delete(tournamentEntries).where(inArray(tournamentEntries.tournamentId, tournamentIds));
+    await db.delete(tournamentCategories).where(inArray(tournamentCategories.tournamentId, tournamentIds));
+    await db.delete(tournaments).where(inArray(tournaments.id, tournamentIds));
   }
 
   await db.delete(venues).where(eq(venues.groupId, groupId));

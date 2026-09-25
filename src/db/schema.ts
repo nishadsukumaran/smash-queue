@@ -54,6 +54,21 @@ export const users = pgTable(
      * accounts that have not finished setting up.
      */
     onboardedAt: ts("onboarded_at"),
+    /*
+     * The player's own profile. All optional, all self-declared, all shown
+     * only to the player — except gender and level, which the organizers of a
+     * tournament see once the player enters it, because that is what they
+     * need to place the entry. Gender and level are required before entering
+     * a tournament; nothing else ever asks for them.
+     */
+    gender: text("gender").$type<Gender>(),
+    /** Year only: enough for age categories, less than a date of birth. */
+    birthYear: integer("birth_year"),
+    level: text("level").$type<PlayerLevel>(),
+    /** ISO 3166-1 alpha-2, e.g. "IN", "AE". */
+    nationality: text("nationality"),
+    handedness: text("handedness").$type<"right" | "left">(),
+    profileUpdatedAt: ts("profile_updated_at"),
     createdAt: ts("created_at").notNull(),
   },
   // Postgres allows many NULLs under a unique index, so players without an
@@ -62,6 +77,25 @@ export const users = pgTable(
     uniqueIndex("users_email_idx").on(t.email),
     uniqueIndex("users_player_no_idx").on(t.playerNo),
   ],
+);
+
+export type Gender = "male" | "female" | "other";
+export type PlayerLevel = "beginner" | "intermediate" | "advanced" | "expert";
+
+/**
+ * People a player likes to partner. Private to the player: it pre-fills the
+ * partner on a tournament entry, and nobody else sees the list — including
+ * the partners on it.
+ */
+export const preferredPartners = pgTable(
+  "preferred_partners",
+  {
+    id: id(),
+    userId: text("user_id").notNull().references(() => users.id),
+    partnerId: text("partner_id").notNull().references(() => users.id),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [uniqueIndex("pref_partner_pair_idx").on(t.userId, t.partnerId)],
 );
 
 /* ----------------------------------------------------------------- groups */
@@ -743,6 +777,229 @@ export const roleRequests = pgTable(
 
 export type RequestStatus = "pending" | "approved" | "declined" | "withdrawn";
 
+/* ------------------------------------------------------------ tournaments */
+
+/**
+ * A tournament a community hosts.
+ *
+ * Owned by the host community exactly as its sessions are: its organizers
+ * create and run it, and nobody outside can. What `visibility` changes is who
+ * may see it and enter it:
+ *
+ *   community — members of the host community only
+ *   public    — any SmashQ account; listed on /tournaments. Entering does not
+ *               make somebody a member of the host community, and their
+ *               details reach its organizers only because they entered.
+ */
+export const tournaments = pgTable(
+  "tournaments",
+  {
+    id: id(),
+    groupId: text("group_id").notNull().references(() => groups.id),
+    /** Short shareable code: /t/<code>. */
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    venueId: text("venue_id").references(() => venues.id),
+    /** Free text when the venue is not one of the community's own. */
+    venueText: text("venue_text"),
+    /** ISO dates. A one-day event has the same start and end. */
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    startTime: text("start_time"),
+    /** Entries close at the end of this day (community time zone). */
+    entryDeadline: text("entry_deadline"),
+    visibility: text("visibility").$type<TournamentVisibility>().notNull().default("community"),
+    status: text("status").$type<TournamentStatus>().notNull().default("draft"),
+    /** Organizer confirms each entry, or entries are in as soon as made. */
+    approval: text("approval").$type<"manual" | "auto">().notNull().default("manual"),
+    currency: text("currency").notNull().default("AED"),
+    /** How to pay: bank details, "cash at the desk", a payment link. */
+    paymentNote: text("payment_note"),
+    rules: text("rules"),
+    contact: text("contact"),
+    createdBy: text("created_by").references(() => users.id),
+    publishedAt: ts("published_at"),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("tournaments_code_idx").on(t.code),
+    index("tournaments_group_idx").on(t.groupId),
+    index("tournaments_visibility_idx").on(t.visibility, t.status),
+  ],
+);
+
+export type TournamentVisibility = "community" | "public";
+/**
+ * draft     — only organizers see it
+ * open      — published, entries open
+ * closed    — published, entries closed, draws being made
+ * live      — play has started
+ * completed — results final
+ * cancelled — called off; kept so entrants can see it was
+ */
+export type TournamentStatus = "draft" | "open" | "closed" | "live" | "completed" | "cancelled";
+
+/** One event inside a tournament: Men's Doubles B, Mixed Open, Women's Singles. */
+export const tournamentCategories = pgTable(
+  "tournament_categories",
+  {
+    id: id(),
+    tournamentId: text("tournament_id").notNull().references(() => tournaments.id),
+    name: text("name").notNull(),
+    /**
+     * Who may enter, as the organizer vets it. The app keeps no gender or age
+     * on anybody, so eligibility is declared by the entrant and confirmed by
+     * the organizer, the same way it is on a paper form.
+     */
+    gender: text("gender").$type<CategoryGender>().notNull().default("open"),
+    /** Singles or doubles. */
+    teamSize: integer("team_size").notNull().default(2),
+    /** Free text: A, B, C, Open, Beginner, 40+. */
+    level: text("level"),
+    format: text("format").$type<TournamentFormat>().notNull().default("knockout"),
+    /** For groups_knockout: teams per group and how many go through. */
+    groupSize: integer("group_size").notNull().default(4),
+    advancePerGroup: integer("advance_per_group").notNull().default(2),
+    maxEntries: integer("max_entries"),
+    /** Entry fee. See feeBasis for whether it is per player or per team. */
+    fee: doublePrecision("fee").notNull().default(0),
+    feeBasis: text("fee_basis").$type<"player" | "team">().notNull().default("player"),
+    pointsTo: integer("points_to").notNull().default(21),
+    /** 1 = one game; 3 = best of three. */
+    bestOf: integer("best_of").notNull().default(1),
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** Set when the draw is made. Entries freeze from then on. */
+    drawnAt: ts("drawn_at"),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [index("tcat_tournament_idx").on(t.tournamentId)],
+);
+
+export type CategoryGender = "men" | "women" | "mixed" | "open";
+export type TournamentFormat = "knockout" | "round_robin" | "groups_knockout";
+
+/**
+ * A prize. Money or anything else — a trophy, a racket, a voucher. Hangs off a
+ * category for "winner of Men's Doubles A", or off the tournament alone for
+ * something like "best newcomer".
+ */
+export const tournamentPrizes = pgTable(
+  "tournament_prizes",
+  {
+    id: id(),
+    tournamentId: text("tournament_id").notNull().references(() => tournaments.id),
+    categoryId: text("category_id").references(() => tournamentCategories.id),
+    /** 1 = winner, 2 = runner-up, 3 = semi-finalists. Null for a special award. */
+    place: integer("place"),
+    /** Shown instead of the place, e.g. "Best newcomer". */
+    title: text("title"),
+    kind: text("kind").$type<PrizeKind>().notNull().default("cash"),
+    amount: doublePrecision("amount"),
+    description: text("description"),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [index("tprize_tournament_idx").on(t.tournamentId)],
+);
+
+export type PrizeKind = "cash" | "trophy" | "medal" | "voucher" | "gift" | "other";
+
+/**
+ * One entry into one category: a player, or a pair.
+ *
+ * A partner is named by their player number and has to say yes before the
+ * entry counts. Nobody is entered into anything by somebody else.
+ */
+export const tournamentEntries = pgTable(
+  "tournament_entries",
+  {
+    id: id(),
+    tournamentId: text("tournament_id").notNull().references(() => tournaments.id),
+    categoryId: text("category_id").notNull().references(() => tournamentCategories.id),
+    player1Id: text("player1_id").notNull().references(() => users.id),
+    player2Id: text("player2_id").references(() => users.id),
+    /** Optional team name, e.g. "Net Ninjas". */
+    teamName: text("team_name"),
+    status: text("status").$type<EntryStatus>().notNull().default("pending"),
+    /** Organizer's seeding; lower is stronger. Null = seeded by rating. */
+    seed: integer("seed"),
+    note: text("note"),
+    amountDue: doublePrecision("amount_due").notNull().default(0),
+    paymentStatus: text("payment_status").$type<PaymentStatus>().notNull().default("unpaid"),
+    paymentMethod: text("payment_method").$type<PaymentMethod | null>(),
+    paidAt: ts("paid_at"),
+    paymentRecordedBy: text("payment_recorded_by").references(() => users.id),
+    createdBy: text("created_by").references(() => users.id),
+    decidedBy: text("decided_by").references(() => users.id),
+    decidedAt: ts("decided_at"),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [
+    index("tentry_category_idx").on(t.categoryId, t.status),
+    index("tentry_tournament_idx").on(t.tournamentId),
+    index("tentry_p1_idx").on(t.player1Id),
+    index("tentry_p2_idx").on(t.player2Id),
+  ],
+);
+
+/**
+ * partner   — waiting for the named partner to accept
+ * pending   — waiting for the organizer
+ * confirmed — in
+ * waitlisted — the category is full
+ * rejected / withdrawn — out, kept for the record
+ */
+export type EntryStatus = "partner" | "pending" | "confirmed" | "waitlisted" | "rejected" | "withdrawn";
+
+/**
+ * A match in a category's draw.
+ *
+ * Knockout matches point at the match their winner goes on to, so a result
+ * moves the bracket along with one update and no bracket arithmetic at read
+ * time. Group matches carry the group's label and point nowhere.
+ */
+export const tournamentMatches = pgTable(
+  "tournament_matches",
+  {
+    id: id(),
+    tournamentId: text("tournament_id").notNull().references(() => tournaments.id),
+    categoryId: text("category_id").notNull().references(() => tournamentCategories.id),
+    stage: text("stage").$type<"group" | "knockout">().notNull(),
+    /** Group label ("A", "B") for group matches. */
+    groupLabel: text("group_label"),
+    /** 1-based. In a knockout, the last round is the final. */
+    round: integer("round").notNull(),
+    /** Order within the round, 0-based. */
+    slot: integer("slot").notNull(),
+    entryAId: text("entry_a_id").references(() => tournamentEntries.id),
+    entryBId: text("entry_b_id").references(() => tournamentEntries.id),
+    /** Games, e.g. [[21,17],[19,21],[21,15]]. */
+    scores: jsonb("scores").$type<Array<[number, number]>>(),
+    winnerEntryId: text("winner_entry_id").references(() => tournamentEntries.id),
+    status: text("status").$type<TournamentMatchStatus>().notNull().default("pending"),
+    /** Knockout only: where the winner goes, and into which side. */
+    nextMatchId: text("next_match_id"),
+    nextSide: text("next_side").$type<"A" | "B">(),
+    court: text("court"),
+    scheduledAt: text("scheduled_at"),
+    enteredBy: text("entered_by").references(() => users.id),
+    completedAt: ts("completed_at"),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [
+    index("tmatch_category_idx").on(t.categoryId, t.stage, t.round),
+    index("tmatch_tournament_idx").on(t.tournamentId),
+  ],
+);
+
+/**
+ * pending   — waiting on an earlier result for one side
+ * ready     — both sides known
+ * completed — played, or a walkover
+ * bye       — one side had nobody; the other goes through unplayed
+ */
+export type TournamentMatchStatus = "pending" | "ready" | "completed" | "bye";
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Match = typeof matches.$inferSelect;
@@ -759,3 +1016,8 @@ export type GroupInvite = typeof groupInvites.$inferSelect;
 export type TrustedDevice = typeof trustedDevices.$inferSelect;
 export type CommunityRequest = typeof communityRequests.$inferSelect;
 export type RoleRequest = typeof roleRequests.$inferSelect;
+export type Tournament = typeof tournaments.$inferSelect;
+export type TournamentCategory = typeof tournamentCategories.$inferSelect;
+export type TournamentPrize = typeof tournamentPrizes.$inferSelect;
+export type TournamentEntry = typeof tournamentEntries.$inferSelect;
+export type TournamentMatch = typeof tournamentMatches.$inferSelect;

@@ -1,69 +1,115 @@
 import Link from "next/link";
-import { LogoMark } from "@/components/Logo";
-import { PALETTE } from "@/lib/palette";
-import { currentAccount } from "@/lib/auth";
+import { EntryChip, Flash, TournamentCardView } from "@/components/tournament/bits";
+import { SubmitButton } from "@/components/SubmitButton";
+import { browseTournaments, myTournamentEntries, viewerFor } from "@/server/tournament-queries";
+import { answerPartnerAction } from "@/server/tournament-actions";
+import { canOrganize, currentAccount } from "@/lib/auth";
+import { activeCommunity } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Tournaments · SmashQ",
-  description: "Community and open badminton tournaments on SmashQ.",
-};
-
 /**
- * Placeholder, standing in for the tournaments module on `feature/tournaments`.
- *
- * It exists so the landing page's "Browse tournaments" button leads somewhere
- * rather than to a 404 in the window between launching the landing page and
- * merging that branch. The branch owns a page at this same path, so the merge
- * will conflict here — take the branch's version wholesale and delete this
- * file; nothing else in the app imports it.
+ * Every tournament this person can see: public ones from any community, and
+ * the members-only ones of communities they belong to.
  */
-export default async function TournamentsPage() {
+export default async function TournamentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ m?: string; e?: string }>;
+}) {
+  const sp = await searchParams;
   const account = await currentAccount();
-  const signedIn = Boolean(account?.onboarded);
+  const viewer = await viewerFor(account);
+  const [all, mine, active] = await Promise.all([
+    browseTournaments(viewer),
+    account ? myTournamentEntries(account.id) : Promise.resolve([]),
+    activeCommunity(account),
+  ]);
+
+  const upcoming = all.filter((c) => ["open", "closed", "live"].includes(c.t.status));
+  const past = all.filter((c) => c.t.status === "completed").reverse().slice(0, 10);
+  const requests = mine.filter((m) => m.awaitingMe);
+  const organizes = active && canOrganize(account, active.group.id);
 
   return (
-    <div className="space-y-4 pb-10">
-      <section className="showcase led edge-electric px-5 py-10 text-center sm:px-8 sm:py-14">
-        <div className="relative mx-auto max-w-lg">
-          <div className="mx-auto w-fit">
-            <LogoMark size={48} knock={PALETTE.surface} label={null} />
-          </div>
-          <p className="eyebrow mx-auto mt-5 w-fit">Tournaments</p>
-          <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Draws open shortly.
-          </h1>
-          <p className="mt-3 text-sm leading-relaxed text-muted sm:text-base">
-            Seeded groups into a knockout, categories for men, women, mixed and open, partner
-            confirmation, waiting lists and prizes. It is built and in final testing — the first
-            tournaments will be listed here.
-          </p>
+    <div className="space-y-4">
+      <Flash m={sp.m} e={sp.e} />
+      <section className="card p-5">
+        <p className="label">Tournaments</p>
+        <h1 className="mt-1 text-2xl font-extrabold tracking-tight">Play for something</h1>
+        <p className="mt-2 max-w-lg text-sm text-muted">
+          Tournaments from your communities, and open ones any SmashQ player can enter. Pick a
+          category, name your partner by their player number, and you&apos;re in.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {!account && <Link href="/signin?next=/tournaments" className="btn btn-primary">Sign in to enter</Link>}
+          {organizes && <Link href="/admin/tournaments/new" className="btn btn-ghost">Host a tournament</Link>}
+        </div>
+      </section>
 
-          <ul className="mt-5 flex flex-wrap justify-center gap-2">
-            {["Groups into knockout", "Singles and doubles", "Entry fees", "Live results"].map((t) => (
-              <li key={t} className="chip chip-teal">
-                {t}
+      {requests.length > 0 && (
+        <section className="card border-amber/50 p-4">
+          <h2 className="label text-amber">Partner requests</h2>
+          <ul className="mt-2 space-y-2">
+            {requests.map((r) => (
+              <li key={r.entry.id} className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="min-w-0 flex-1">
+                  <span className="font-semibold">{r.enteredByName}</span> wants you for{" "}
+                  <Link href={`/t/${r.tournament.code}?c=${r.category.id}`} className="text-teal hover:underline">
+                    {r.category.name} · {r.tournament.name}
+                  </Link>
+                </span>
+                <form action={answerPartnerAction} className="flex gap-2">
+                  <input type="hidden" name="entryId" value={r.entry.id} />
+                  <input type="hidden" name="next" value="/tournaments" />
+                  <SubmitButton className="btn btn-primary btn-sm" name="answer" value="yes">Accept</SubmitButton>
+                  <SubmitButton className="btn btn-ghost btn-sm" name="answer" value="no">Decline</SubmitButton>
+                </form>
               </li>
             ))}
           </ul>
+        </section>
+      )}
 
-          <div className="mt-7 flex flex-wrap justify-center gap-2.5">
-            {signedIn ? (
-              <Link href="/" className="btn btn-primary">
-                Back to your courts
-              </Link>
-            ) : (
-              <Link href="/signin?next=/tournaments" className="btn btn-primary">
-                Sign in to be ready
-              </Link>
-            )}
-            <Link href="/guide" className="btn btn-ghost">
-              How SmashQ works
-            </Link>
-          </div>
-        </div>
+      {mine.filter((m) => !m.awaitingMe && m.entry.status !== "withdrawn" && ["open", "closed", "live"].includes(m.tournament.status)).length > 0 && (
+        <section className="card p-4">
+          <h2 className="label">You&apos;re entered</h2>
+          <ul className="mt-2 divide-y divide-line/60">
+            {mine
+              .filter((m) => !m.awaitingMe && m.entry.status !== "withdrawn" && ["open", "closed", "live"].includes(m.tournament.status))
+              .map((m) => (
+                <li key={m.entry.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                  <Link href={`/t/${m.tournament.code}?c=${m.category.id}`} className="min-w-0 flex-1 hover:text-shuttle">
+                    <span className="font-semibold">{m.tournament.name}</span>
+                    <span className="text-muted"> · {m.category.name}{m.partnerName ? ` with ${m.partnerName}` : ""}</span>
+                  </Link>
+                  <EntryChip status={m.entry.status} />
+                </li>
+              ))}
+          </ul>
+        </section>
+      )}
+
+      <section className="space-y-2">
+        <h2 className="label px-1">Coming up</h2>
+        {upcoming.length === 0 && (
+          <p className="card p-4 text-sm text-muted">
+            No tournaments announced right now. When a community you&apos;re in announces one, it shows up here.
+          </p>
+        )}
+        {upcoming.map((c) => (
+          <TournamentCardView key={c.t.id} c={c} />
+        ))}
       </section>
+
+      {past.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="label px-1">Results</h2>
+          {past.map((c) => (
+            <TournamentCardView key={c.t.id} c={c} />
+          ))}
+        </section>
+      )}
     </div>
   );
 }

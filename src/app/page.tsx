@@ -22,6 +22,8 @@ import { activeCommunity, myCommunities } from "@/lib/tenant";
 import { markAnnouncementsRead } from "@/server/actions";
 import { clockTime, minutesSince, money, prettyDate, prettyDateTime, prettyTime, TIME_ZONE } from "@/lib/format";
 import type { CSSProperties } from "react";
+import { upcomingForGroup } from "@/server/tournament-queries";
+import { TournamentCardView } from "@/components/tournament/bits";
 
 export const dynamic = "force-dynamic";
 
@@ -43,11 +45,12 @@ export default async function Home() {
   if (!active) redirect("/communities");
   const group = active.group;
 
-  const [mine, all, userId, staff] = await Promise.all([
+  const [mine, all, userId, staff, cups] = await Promise.all([
     myCommunities(account),
     listSessions(group.id),
     currentUserId(),
     isStaffFor(group.id),
+    upcomingForGroup(group.id),
   ]);
   const me = userId ? (await db.select().from(users).where(eq(users.id, userId)))[0] ?? null : null;
 
@@ -91,6 +94,7 @@ export default async function Home() {
         <div className="flex flex-wrap gap-2 rise" style={step(1)}>
           {!userId && <Link href="/who" className="btn btn-primary">Pick your name</Link>}
           <Link href="/guide" className="btn btn-ghost">How it works</Link>
+          <Link href="/tournaments" className="btn btn-ghost">Tournaments</Link>
           <Link href="/members" className="btn btn-ghost">Members</Link>
           <Link href="/communities" className="btn btn-ghost">Communities</Link>
           <Link href="/admin" className="btn btn-ghost">{staff || canStaff(account, group.id) ? "Organizer" : "Organizer sign in"}</Link>
@@ -114,6 +118,20 @@ export default async function Home() {
               </span>
               <span className="ml-auto font-bold text-teal">→</span>
             </Link>
+          </div>
+        </section>
+      )}
+
+      {cups.length > 0 && (
+        <section className="space-y-2">
+          <div className="mx-1 flex items-baseline justify-between gap-3">
+            <h2 className="label">Tournaments</h2>
+            <Link href="/tournaments" className="text-xs text-teal hover:underline">All tournaments</Link>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {cups.map((c) => (
+              <TournamentCardView key={c.t.id} c={c} />
+            ))}
           </div>
         </section>
       )}
