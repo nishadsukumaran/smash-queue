@@ -18,3 +18,7 @@ Claude outputs/
 
 # ad-hoc helper scripts run via the desktop bridge
 scripts/_*
+
+# local git credential store (never commit)
+smashq-credentials
+.git-credentials
