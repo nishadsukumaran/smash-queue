@@ -54,6 +54,21 @@ export const users = pgTable(
      * accounts that have not finished setting up.
      */
     onboardedAt: ts("onboarded_at"),
+    /*
+     * The player's own profile. All optional, all self-declared, all shown
+     * only to the player — except gender and level, which the organizers of a
+     * tournament see once the player enters it, because that is what they
+     * need to place the entry. Gender and level are required before entering
+     * a tournament; nothing else ever asks for them.
+     */
+    gender: text("gender").$type<Gender>(),
+    /** Year only: enough for age categories, less than a date of birth. */
+    birthYear: integer("birth_year"),
+    level: text("level").$type<PlayerLevel>(),
+    /** ISO 3166-1 alpha-2, e.g. "IN", "AE". */
+    nationality: text("nationality"),
+    handedness: text("handedness").$type<"right" | "left">(),
+    profileUpdatedAt: ts("profile_updated_at"),
     createdAt: ts("created_at").notNull(),
   },
   // Postgres allows many NULLs under a unique index, so players without an
@@ -62,6 +77,25 @@ export const users = pgTable(
     uniqueIndex("users_email_idx").on(t.email),
     uniqueIndex("users_player_no_idx").on(t.playerNo),
   ],
+);
+
+export type Gender = "male" | "female" | "other";
+export type PlayerLevel = "beginner" | "intermediate" | "advanced" | "expert";
+
+/**
+ * People a player likes to partner. Private to the player: it pre-fills the
+ * partner on a tournament entry, and nobody else sees the list — including
+ * the partners on it.
+ */
+export const preferredPartners = pgTable(
+  "preferred_partners",
+  {
+    id: id(),
+    userId: text("user_id").notNull().references(() => users.id),
+    partnerId: text("partner_id").notNull().references(() => users.id),
+    createdAt: ts("created_at").notNull(),
+  },
+  (t) => [uniqueIndex("pref_partner_pair_idx").on(t.userId, t.partnerId)],
 );
 
 /* ----------------------------------------------------------------- groups */

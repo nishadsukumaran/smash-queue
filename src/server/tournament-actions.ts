@@ -35,6 +35,7 @@ import {
   groupStageDraw, judgeScores, knockoutDraw, knockoutFromGroups, roundRobinDraw, type DrawMatch, type Games,
 } from "@/lib/tournament-engine";
 import { getTournamentById, seededOrder, tournamentDetail } from "./tournament-queries";
+import { genderFit, missingForTournaments } from "@/lib/profile";
 
 /* ------------------------------------------------------------- helpers */
 
@@ -127,6 +128,23 @@ async function hostRunners(groupId: string) {
         ),
       )
   ).map((r) => r.userId);
+}
+
+async function profileOf(userId: string) {
+  const [u] = await db
+    .select({ gender: users.gender, level: users.level, name: users.name })
+    .from(users)
+    .where(eq(users.id, userId));
+  return u ?? null;
+}
+
+/** Off to the profile page, and back to `returnTo` once it's filled in. */
+function completeProfileFirst(returnTo: string, missing: string[]): never {
+  redirect(
+    `/me/profile?next=${encodeURIComponent(returnTo)}&e=${encodeURIComponent(
+      `Add your ${missing.join(" and ")} to enter tournaments.`,
+    )}`,
+  );
 }
 
 const LIVE_ENTRY: EntryStatus[] = ["partner", "pending", "confirmed", "waitlisted"];
@@ -491,16 +509,31 @@ export async function enterTournamentAction(fd: FormData) {
   if (closed) back(fd, fallback, closed, true);
   if (t.visibility === "community" && !(await activeMember(t.groupId, account.id)))
     back(fd, fallback, `This tournament is for ${row.g.name} members.`, true);
+  const mine = await profileOf(account.id);
+  const missing = mine ? missingForTournaments(mine) : ["gender", "playing level"];
+  if (missing.length) completeProfileFirst(`/t/${t.code}?c=${c.id}`, missing);
   if (!fd.get("eligible")) back(fd, fallback, "Confirm you meet the category's eligibility.", true);
   if (await alreadyIn(c.id, account.id)) back(fd, fallback, `You're already entered in ${c.name}.`, true);
+  if (c.teamSize === 1) {
+    const misfit = genderFit(c.gender, [mine!.gender]);
+    if (misfit) back(fd, fallback, misfit, true);
+  } else {
+    // The partner may not have filled in their profile yet; they're asked to
+    // when they accept. What can be ruled out now, is.
+    const alone =
+      (c.gender === "men" && mine!.gender !== "male") ||
+      (c.gender === "women" && mine!.gender !== "female") ||
+      (c.gender === "mixed" && mine!.gender === "other");
+    if (alone) back(fd, fallback, genderFit(c.gender, [mine!.gender, mine!.gender]) ?? "This category doesn't fit your profile.", true);
+  }
 
   let partnerId: string | null = null;
   let partnerName = "";
   if (c.teamSize === 2) {
-    const no = Number(str(fd, "partnerNo").replace(/[^0-9]/g, ""));
+    const no = Number((str(fd, "partnerNo") || str(fd, "partnerPick")).replace(/[^0-9]/g, ""));
     if (!no) back(fd, fallback, "Enter your partner's player number. It's on their profile.", true);
     const [p] = await db
-      .select({ id: users.id, name: users.name, onboardedAt: users.onboardedAt, active: users.active })
+      .select({ id: users.id, name: users.name, onboardedAt: users.onboardedAt, active: users.active, gender: users.gender })
       .from(users)
       .where(eq(users.playerNo, no));
     if (!p || !p.active) back(fd, fallback, `No player has the number ${no}.`, true);
@@ -510,6 +543,10 @@ export async function enterTournamentAction(fd: FormData) {
     if (t.visibility === "community" && !(await activeMember(t.groupId, p.id)))
       back(fd, fallback, `${p.name} isn't a member of ${row.g.name}.`, true);
     if (await alreadyIn(c.id, p.id)) back(fd, fallback, `${p.name} is already entered in ${c.name}.`, true);
+    if (p.gender) {
+      const misfit = genderFit(c.gender, [mine!.gender, p.gender]);
+      if (misfit) back(fd, fallback, `${misfit} Check the category, or your partner.`, true);
+    }
     partnerId = p.id;
     partnerName = p.name;
   }
@@ -589,6 +626,26 @@ export async function answerPartnerAction(fd: FormData) {
   if (closed) back(fd, "/me", closed, true);
   if (row.t.visibility === "community" && !(await activeMember(row.t.groupId, account.id)))
     back(fd, "/me", `This tournament is for ${row.g.name} members.`, true);
+  const mine = await profileOf(account.id);
+  const missing = mine ? missingForTournaments(mine) : ["gender", "playing level"];
+  if (missing.length) completeProfileFirst(safeNext(str(fd, "next"), "/me"), missing);
+  const lead = await profileOf(e.player1Id);
+  const misfit = genderFit(c.gender, [lead?.gender ?? null, mine!.gender]);
+  if (misfit) {
+    // The request can never become valid, so it shouldn't sit there blocking
+    // either player from entering the category with someone else.
+    await db
+      .update(tournamentEntries)
+      .set({ status: "withdrawn", decidedAt: new Date(), decidedBy: account.id })
+      .where(eq(tournamentEntries.id, e.id));
+    pushLater([e.player1Id], {
+      title: "Entry can't go ahead",
+      body: `${misfit} Your ${c.name} entry with ${account.name} was withdrawn.`,
+      url: `/t/${row.t.code}?c=${c.id}`,
+    });
+    touch(row.t);
+    back(fd, "/me", `${misfit} The request was withdrawn, so you're both free to enter with someone else.`, true);
+  }
   // Somebody else may have entered them in the meantime.
   const [other] = await db
     .select({ id: tournamentEntries.id })

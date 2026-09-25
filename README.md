@@ -360,7 +360,8 @@ Everything in PRD §31 (MVP scope):
 | **Stats** | Player history, personal stats, doubles Elo leaderboard |
 | **Audit** | Silent coordinator override log |
 | **Schema** | Committed migrations, with baselining for databases built before them |
-| **Tournaments** | Members-only or public, categories (men/women/mixed, singles/doubles, levels), fees per player or pair, prizes in cash or kind, partner confirmation, entry approval and waitlist, seeding, groups + knockout / knockout / round robin, live results and standings |
+| **Profiles** | Optional gender, birth year, playing level (A to D), nationality, handedness, phone, and a private preferred-partners list. Gender and level required to enter tournaments |
+| **Tournaments** | Members-only or public, categories (men/women/mixed, singles/doubles, levels), fees per player or pair, prizes in cash or kind, partner confirmation, gender checks for men's / women's / mixed, entry approval and waitlist, seeding, groups + knockout / knockout / round robin, live results and standings |
 | **Notifications** | Web Push: put on court, waitlist spot, notices, invitations, day-of reminder. iPhone needs the home-screen app |
 | **Delivery** | Installable PWA, no external CDN or font dependencies |
 

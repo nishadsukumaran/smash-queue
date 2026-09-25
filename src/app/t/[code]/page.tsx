@@ -14,6 +14,9 @@ import { enterTournamentAction, withdrawEntryAction } from "@/server/tournament-
 import { canStaff, currentAccount } from "@/lib/auth";
 import { currentUserId, isStaffFor } from "@/lib/identity";
 import { money, prettyDate, prettyTime, TIME_ZONE } from "@/lib/format";
+import { genderFit, missingForTournaments } from "@/lib/profile";
+import { getProfile, myPreferredPartners } from "@/server/profile-queries";
+import type { Gender } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +78,10 @@ export default async function TournamentPage({
   const signedIn = Boolean(account?.onboarded);
   const member = viewer.memberOf.has(t.groupId);
   const mayEnter = t.visibility === "public" || member;
+  const [profile, partners] = signedIn && account
+    ? await Promise.all([getProfile(account.id), myPreferredPartners(account.id)])
+    : [null, []];
+  const profileMissing = profile ? missingForTournaments(profile) : [];
   const deadlinePassed = Boolean(t.entryDeadline && new Date().toLocaleDateString("en-CA", { timeZone: TIME_ZONE }) > t.entryDeadline);
 
   const selected = d.categories.find((c) => c.id === sp.c) ?? d.categories.find((c) => c.matches.length > 0) ?? d.categories[0];
@@ -187,6 +194,9 @@ export default async function TournamentPage({
               groupName={d.group.name}
               alreadyIn={c.entries.some((e) => ["partner", "pending", "confirmed", "waitlisted"].includes(e.status) && (meIds.has(e.player1Id) || (e.player2Id !== null && meIds.has(e.player2Id))))}
               playerNo={account?.playerNo ?? null}
+              profileMissing={profileMissing}
+              myGender={profile?.gender ?? null}
+              partners={partners}
             />
           ))}
         </div>
@@ -294,7 +304,11 @@ function Fact({ label, value, sub, href }: { label: string; value: string; sub?:
 
 function CategoryCard({
   c, currency, selected, code, enterable, signedIn, mayEnter, groupName, alreadyIn, playerNo,
+  profileMissing, myGender, partners,
 }: {
+  profileMissing: string[];
+  myGender: Gender | null;
+  partners: Array<{ id: string; name: string; playerNo: number; gender: Gender | null }>;
   c: CategoryView;
   currency: string;
   selected: boolean;
@@ -307,6 +321,10 @@ function CategoryCard({
   playerNo: number | null;
 }) {
   const full = Boolean(c.maxEntries && c.confirmed >= c.maxEntries);
+  // Preferred partners who could make this entry legal (unknown gender counts: they'll be asked).
+  const pickable = c.teamSize === 2
+    ? partners.filter((p) => !p.gender || !myGender || genderFit(c.gender, [myGender, p.gender]) === null)
+    : [];
   const fee = c.fee === 0 ? "Free" : `${money(c.fee, currency)} ${c.feeBasis === "team" ? (c.teamSize === 2 ? "per pair" : "per entry") : "per player"}`;
   return (
     <div className={`card p-4 ${selected ? "border-shuttle/50" : ""}`}>
@@ -336,6 +354,14 @@ function CategoryCard({
             <Link href={`/signin?next=/t/${code}?c=${c.id}`} className="btn btn-primary btn-sm">Sign in to enter</Link>
           ) : !mayEnter ? (
             <p className="text-xs text-muted">For {groupName} members.</p>
+          ) : profileMissing.length > 0 ? (
+            <Link href={`/me/profile?next=${encodeURIComponent(`/t/${code}?c=${c.id}`)}`} className="btn btn-primary btn-sm">
+              Add your {profileMissing.join(" and ")} to enter
+            </Link>
+          ) : (c.teamSize === 1 ? genderFit(c.gender, [myGender]) : c.gender === "mixed" ? genderFit("mixed", [myGender, myGender === "male" ? "female" : "male"]) : genderFit(c.gender, [myGender, myGender])) ? (
+            <p className="text-xs text-muted">
+              {c.gender === "men" ? "For men." : c.gender === "women" ? "For women." : "Mixed is one man and one woman."} Your profile says otherwise.
+            </p>
           ) : (
             <details>
               <summary className="btn btn-primary btn-sm list-none">{full ? "Join the waiting list" : "Enter"}</summary>
@@ -344,8 +370,16 @@ function CategoryCard({
                 <input type="hidden" name="next" value={`/t/${code}?c=${c.id}`} />
                 {c.teamSize === 2 && (
                   <label className="block">
-                    <span className="label">Partner&apos;s player number</span>
-                    <input className="input mt-1" name="partnerNo" inputMode="numeric" placeholder="e.g. 1042" required />
+                    <span className="label">{pickable.length ? "Partner" : "Partner\u2019s player number"}</span>
+                    {pickable.length > 0 && (
+                      <select className="input mt-1" name="partnerPick" defaultValue={String(pickable[0].playerNo)} aria-label="Pick a preferred partner">
+                        {pickable.map((p) => (
+                          <option key={p.id} value={p.playerNo}>{p.name} · #{p.playerNo}</option>
+                        ))}
+                      </select>
+                    )}
+                    <input className="input mt-1" name="partnerNo" inputMode="numeric"
+                      placeholder={pickable.length ? "Or someone else's number" : "e.g. 1042"} required={pickable.length === 0} />
                     <span className="mt-1 block text-xs text-muted">
                       On their profile page. They&apos;ll get a request to accept.{playerNo ? ` Yours is #${playerNo}.` : ""}
                     </span>

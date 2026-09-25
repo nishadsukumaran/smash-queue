@@ -5,7 +5,7 @@ import {
   groupMembers, groups, tournamentCategories, tournamentEntries, tournamentMatches,
   tournamentPrizes, tournaments, users, venues,
   type Group, type Tournament, type TournamentCategory, type TournamentEntry,
-  type TournamentMatch, type TournamentPrize,
+  type TournamentMatch, type TournamentPrize, type Gender, type PlayerLevel,
 } from "@/db/schema";
 import { canOrganize, type Account } from "@/lib/auth";
 import { myCommunities } from "@/lib/tenant";
@@ -179,7 +179,7 @@ export async function publicUpcomingForGroup(groupId: string): Promise<Tournamen
 
 /* ---------------------------------------------------------------- detail */
 
-export type EntryPlayer = { id: string; name: string; playerNo: number };
+export type EntryPlayer = { id: string; name: string; playerNo: number; gender: Gender | null; level: PlayerLevel | null };
 
 export type EntryView = TournamentEntry & {
   p1: EntryPlayer;
@@ -247,7 +247,7 @@ export async function tournamentDetail(t: Tournament, group: Group): Promise<Tou
   const [people, ratings] = playerIds.length
     ? await Promise.all([
         db
-          .select({ id: users.id, name: users.name, playerNo: users.playerNo })
+          .select({ id: users.id, name: users.name, playerNo: users.playerNo, gender: users.gender, level: users.level })
           .from(users)
           .where(inArray(users.id, playerIds)),
         db
@@ -258,7 +258,7 @@ export async function tournamentDetail(t: Tournament, group: Group): Promise<Tou
     : [[], []];
   const person = new Map(people.map((p) => [p.id, p]));
   const rating = new Map(ratings.map((r) => [r.userId, r.rating]));
-  const unknown = (id: string): EntryPlayer => ({ id, name: "Unknown", playerNo: 0 });
+  const unknown = (id: string): EntryPlayer => ({ id, name: "Unknown", playerNo: 0, gender: null, level: null });
 
   const views: EntryView[] = entries.map((e) => {
     const p1 = person.get(e.player1Id) ?? unknown(e.player1Id);

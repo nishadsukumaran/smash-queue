@@ -171,6 +171,16 @@ you hand over the cash or send the transfer.
 Tap your name in the top right. Sessions attended, games played, win rate, recent form,
 your most frequent partner and opponent, and your rating.
 
+**Edit profile** adds the rest, all optional: gender, year of birth, playing level
+(Beginner D, Intermediate C, Advanced B, Expert A), nationality, which hand you play with,
+and a phone number. Only you see it — except gender and level, which the organizers of a
+tournament see once you enter it. **Gender and level are required before you can enter a
+tournament**; if they're missing, the app takes you to fill them in and straight back.
+
+**Preferred partners** are people you like to play with, added by player number. They
+appear as one-tap picks when you enter a doubles category. The list is private: nobody is
+told they're on it.
+
 ---
 
 ## 3. For the coordinator
@@ -427,7 +437,9 @@ record results, all in the app. Open **Tournaments** from the home page to see w
 
 ### Entering one
 
-Open the tournament, pick a category and tap **Enter**. For doubles, type your partner's
+Open the tournament, pick a category and tap **Enter**. You need your gender and level on
+your profile first. Men's and women's categories check both players; mixed needs one man
+and one woman. For doubles, pick a preferred partner or type your partner's
 **player number** (it's on their profile). They get a request on their profile page and in
 **Tournaments**, and the entry only counts once they accept. Nobody can put your name down
 without you saying yes.

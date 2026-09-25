@@ -19,6 +19,8 @@ import { listVenues } from "@/server/queries";
 import { currentAccount } from "@/lib/auth";
 import { money } from "@/lib/format";
 import type { TournamentStatus } from "@/db/schema";
+import { genderLabel, LEVELS } from "@/lib/profile";
+import type { EntryPlayer } from "@/server/tournament-queries";
 
 export const dynamic = "force-dynamic";
 
@@ -328,10 +330,10 @@ function EntriesTab({ d }: { d: TournamentDetail }) {
                 <li key={e.id} className="space-y-2 py-3">
                   <div className="flex flex-wrap items-center gap-2 text-sm">
                     <span className="min-w-0 flex-1">
-                      <span className="font-semibold">{e.p1.name}</span> <span className="font-mono text-xs text-muted">#{e.p1.playerNo}</span>
+                      <Who p={e.p1} />
                       {e.p2 && (
                         <>
-                          {" & "}<span className="font-semibold">{e.p2.name}</span> <span className="font-mono text-xs text-muted">#{e.p2.playerNo}</span>
+                          {" & "}<Who p={e.p2} />
                         </>
                       )}
                       {e.teamName && <span className="text-muted"> · {e.teamName}</span>}
@@ -378,6 +380,19 @@ function EntriesTab({ d }: { d: TournamentDetail }) {
         );
       })}
     </div>
+  );
+}
+
+/** Name, number, and the two profile facts an organizer places entries by. */
+function Who({ p }: { p: EntryPlayer }) {
+  const lvl = LEVELS.find((l) => l.value === p.level);
+  return (
+    <span className="whitespace-nowrap">
+      <span className="font-semibold">{p.name}</span> <span className="font-mono text-xs text-muted">#{p.playerNo}</span>
+      <span className="ml-1 text-[11px] text-muted">
+        {[genderLabel(p.gender)?.charAt(0), lvl ? `${lvl.label} ${lvl.letter}` : null].filter(Boolean).join(" · ") || "no profile"}
+      </span>
+    </span>
   );
 }
 

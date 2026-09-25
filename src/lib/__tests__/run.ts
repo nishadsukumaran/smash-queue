@@ -10,6 +10,7 @@ import {
   bracketSize, seedOrder, knockoutDraw, roundRobinDraw, splitIntoGroups, judgeScores,
   standings, knockoutFromGroups, knockoutPlacings, roundName,
 } from "../tournament-engine";
+import { genderFit, missingForTournaments, ageFrom, countries, countryName } from "../profile";
 
 let passed = 0;
 const failures: string[] = [];
@@ -284,6 +285,19 @@ check("rating bands line up with the PRD", ratingBand(900).label === "Beginner" 
     { round: 2, entryA: "a", entryB: "c", winner: "c", done: true },
   ]);
   check("placings: champion, runner-up and two thirds", places.map((p) => `${p.place}${p.entryId}`).join() === "1c,2a,3d,3b", places);
+}
+
+/* --------------------------------------------------------------- profile */
+
+{
+  check("open takes anyone", genderFit("open", ["other", null]) === null);
+  check("men's needs every player male", genderFit("men", ["male", "male"]) === null && genderFit("men", ["male", "female"]) !== null);
+  check("women's singles", genderFit("women", ["female"]) === null && genderFit("women", ["male"]) !== null);
+  check("mixed is one of each", genderFit("mixed", ["female", "male"]) === null && genderFit("mixed", ["male", "male"]) !== null && genderFit("mixed", ["female", "other"]) !== null);
+  check("a missing gender blocks a gendered category", genderFit("men", ["male", null]) !== null);
+  check("gender and level are what tournaments need", missingForTournaments({ gender: null, level: "advanced" }).join() === "gender" && missingForTournaments({ gender: "male", level: "expert" }).length === 0);
+  check("age comes from the birth year", ageFrom(1990, new Date("2026-06-01")) === 36 && ageFrom(null) === null);
+  check("country names come from Intl", countryName("AE") === "United Arab Emirates" && countryName("IN") === "India" && countries().length > 240);
 }
 
 console.log("\n  " + "-".repeat(58));

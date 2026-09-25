@@ -77,7 +77,8 @@ export default async function MePage({
               {account.email ? ` · ${account.email}` : ""}
             </p>
           </div>
-          <form action={signOutAction} className="ml-auto">
+          <Link href="/me/profile" className="btn btn-ghost btn-sm ml-auto">Edit profile</Link>
+          <form action={signOutAction}>
             <SubmitButton className="btn btn-ghost btn-sm">Sign out</SubmitButton>
           </form>
         </div>
